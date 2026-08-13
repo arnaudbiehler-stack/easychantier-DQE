@@ -1,0 +1,9 @@
+{
+  "name": "easychantier-metreur-ia",
+  "version": "4.0.0",
+  "private": true,
+  "description": "Easy Chantier - Metreur IA : outil web partage (Vercel + Vercel KV) pour generer des metres a partir de plans DCE via l'IA.",
+  "dependencies": {
+    "@vercel/kv": "^1.0.1"
+  }
+}

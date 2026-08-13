@@ -1,0 +1,1263 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Easy Chantier · Métreur IA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --bg:#14171c; --surface:#1c2027; --surface-2:#242932; --surface-3:#2c323d;
+  --border:#343b46; --text:#f2f1ec; --text-dim:#9aa1ac; --text-faint:#666e7a;
+  --copper:#e2914d; --copper-dim:#7a5330; --teal:#57d6c4; --teal-dim:#1f4b46;
+  --red:#e2574c; --red-dim:#4a2825; --green:#7dd87d;
+  --radius:10px; --font-display:'Space Grotesk',sans-serif; --font-body:'Inter',sans-serif; --font-mono:'JetBrains Mono',monospace;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:var(--font-body);min-height:100vh;}
+::-webkit-scrollbar{width:10px;height:10px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:var(--surface-3);border-radius:6px;}
+
+.topbar{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:18px;padding:12px 22px;
+  background:rgba(20,23,28,0.94);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);flex-wrap:wrap;}
+.brand{display:flex;align-items:center;gap:10px;font-family:var(--font-display);font-weight:700;font-size:18px;white-space:nowrap;}
+.brand-mark{width:26px;height:26px;border-radius:7px;flex:none;
+  background:radial-gradient(circle at 30% 30%, var(--copper), transparent 60%),linear-gradient(135deg, var(--surface-3), var(--surface-2));
+  border:1px solid var(--copper-dim);position:relative;}
+.brand-mark::after{content:"";position:absolute;inset:8px;border-radius:2px;background:var(--copper);box-shadow:0 0 8px 1px var(--copper);}
+.brand-sub{font-family:var(--font-body);font-weight:500;font-size:11px;color:var(--text-dim);}
+
+.client-select-wrap{display:flex;align-items:center;gap:8px;}
+select, input, textarea{font-family:var(--font-body);}
+.select-client{background:var(--surface-2);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:7px;font-size:13px;min-width:180px;}
+.btn{appearance:none;border:1px solid var(--border);background:var(--surface-2);color:var(--text);
+  font-weight:600;font-size:12.5px;padding:8px 14px;border-radius:7px;cursor:pointer;transition:.12s;white-space:nowrap;}
+.btn:hover{border-color:var(--copper);color:var(--copper);}
+.btn-primary{background:var(--copper);border-color:var(--copper);color:#1a1305;}
+.btn-primary:hover{opacity:.88;color:#1a1305;}
+.btn-teal{background:var(--teal);border-color:var(--teal);color:#0b1f1c;}
+.btn-teal:hover{opacity:.88;color:#0b1f1c;}
+.btn-danger{border-color:var(--red);color:var(--red);background:transparent;}
+.btn-danger:hover{background:var(--red);color:#2a0d0a;}
+.btn-sm{padding:5px 10px;font-size:11.5px;}
+.spacer{flex:1;}
+.gear{width:34px;height:34px;border-radius:8px;border:1px solid var(--border);background:var(--surface-2);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-dim);font-size:16px;}
+.gear:hover{color:var(--copper);border-color:var(--copper);}
+
+.tabs{display:flex;gap:4px;background:var(--surface);padding:4px;border-radius:999px;border:1px solid var(--border);
+  overflow-x:auto;max-width:100%;}
+.tab{appearance:none;border:none;background:transparent;color:var(--text-dim);font-weight:600;font-size:13px;
+  padding:8px 15px;border-radius:999px;cursor:pointer;transition:.15s;white-space:nowrap;}
+.tab:hover{color:var(--text);}
+.tab.active{background:var(--copper);color:#1a1305;}
+
+.wrap{max-width:1400px;margin:0 auto;padding:22px;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:20px;}
+.card h2{font-family:var(--font-display);font-size:14px;margin:0 0 14px;font-weight:600;text-transform:uppercase;
+  letter-spacing:.06em;color:var(--text-dim);display:flex;align-items:center;gap:8px;}
+.card h2 .count-pill{background:var(--surface-3);color:var(--text-dim);border-radius:999px;padding:2px 9px;font-size:11px;font-family:var(--font-mono);}
+
+.upload-row{display:grid;grid-template-columns:1.3fr 0.7fr;gap:18px;align-items:start;}
+@media (max-width:820px){.upload-row{grid-template-columns:1fr;}}
+.dropzone{border:1.5px dashed var(--border);border-radius:var(--radius);padding:26px;text-align:center;
+  cursor:pointer;transition:.12s;background:var(--surface-2);}
+.dropzone:hover, .dropzone.drag{border-color:var(--copper);background:var(--surface-3);}
+.dropzone .dz-title{font-weight:600;font-size:14px;margin-bottom:4px;}
+.dropzone .dz-sub{font-size:12px;color:var(--text-faint);}
+.dropzone input{display:none;}
+.plan-chip{display:inline-flex;align-items:center;gap:8px;background:var(--surface-3);border:1px solid var(--border);
+  border-radius:999px;padding:6px 12px;font-size:12.5px;margin-top:10px;}
+.plan-chip button{background:none;border:none;color:var(--text-faint);cursor:pointer;font-size:14px;line-height:1;}
+.field{margin-bottom:10px;}
+.field label{display:block;font-size:11px;color:var(--text-faint);margin-bottom:5px;font-weight:600;letter-spacing:.03em;}
+.field input, .field textarea, .field select{width:100%;background:var(--surface-2);border:1px solid var(--border);
+  color:var(--text);padding:9px 11px;border-radius:7px;font-size:13px;outline:none;}
+.field input:focus, .field textarea:focus, .field select:focus{border-color:var(--copper);}
+.field-row{display:flex;gap:10px;}
+.field-row .field{flex:1;}
+.hint{font-size:11.5px;color:var(--text-faint);margin-top:6px;line-height:1.5;}
+.hint b{color:var(--text-dim);}
+
+.status-line{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text-dim);margin-top:10px;min-height:18px;}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--text-faint);}
+.dot.busy{background:var(--copper);animation:pulse 1s infinite;}
+.dot.ok{background:var(--green);}
+.dot.err{background:var(--red);}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+
+table{width:100%;border-collapse:collapse;font-size:12.8px;}
+th{text-align:left;color:var(--text-faint);font-weight:600;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;
+  padding:8px 8px;border-bottom:1px solid var(--border);white-space:nowrap;}
+td{padding:6px 8px;border-bottom:1px solid var(--surface-3);vertical-align:top;}
+tr:hover td{background:var(--surface-2);}
+td input, td select{width:100%;background:transparent;border:1px solid transparent;color:var(--text);padding:5px 6px;
+  border-radius:5px;font-size:12.6px;}
+td input:hover, td select:hover, td textarea:hover{border-color:var(--border);}
+td input:focus, td select:focus, td textarea:focus{border-color:var(--copper);background:var(--surface-2);}
+td textarea{width:100%;background:transparent;border:1px solid transparent;color:var(--text-dim);padding:5px 6px;
+  border-radius:5px;font-size:12px;font-family:var(--font-body);resize:vertical;min-height:34px;line-height:1.4;}
+td.num{text-align:right;font-family:var(--font-mono);}
+.row-del{background:none;border:none;color:var(--text-faint);cursor:pointer;font-size:15px;}
+.row-del:hover{color:var(--red);}
+.table-scroll{overflow-x:auto;}
+.table-foot{display:flex;justify-content:space-between;align-items:center;margin-top:12px;}
+.total-line{font-family:var(--font-mono);font-size:14px;font-weight:600;}
+.total-line span{color:var(--text-faint);font-weight:400;font-size:12px;margin-right:8px;}
+
+.catalog-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;}
+.cat-card{background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:12px;}
+.cat-card .cn{font-weight:600;font-size:12.8px;margin-bottom:4px;}
+.cat-card .cd{font-size:11.5px;color:var(--text-faint);margin-bottom:8px;line-height:1.4;min-height:30px;}
+.cat-card .cp{font-family:var(--font-mono);font-size:13px;color:var(--copper);}
+.cat-card .cu{font-size:11px;color:var(--text-faint);}
+.cat-card-actions{display:flex;gap:6px;margin-top:8px;}
+
+.recap-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:20px;}
+.recap-tile{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:16px;}
+.recap-tile .rt-label{font-size:11px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;}
+.recap-tile .rt-value{font-family:var(--font-mono);font-size:20px;font-weight:600;}
+.recap-tile .rt-sub{font-size:11px;color:var(--text-faint);margin-top:4px;}
+
+.modal-bg{position:fixed;inset:0;background:rgba(10,12,15,.72);display:none;align-items:center;justify-content:center;z-index:100;padding:20px;}
+.modal-bg.show{display:flex;}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:22px;width:100%;max-width:460px;max-height:88vh;overflow-y:auto;}
+.modal h3{margin:0 0 14px;font-family:var(--font-display);font-size:16px;}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px;}
+
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:600;}
+.badge.ai{background:var(--teal-dim);color:var(--teal);}
+.badge.manual{background:var(--surface-3);color:var(--text-faint);}
+.empty{text-align:center;padding:40px 20px;color:var(--text-faint);font-size:13px;}
+a{color:var(--copper);}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><div class="brand-mark"></div>Easy Chantier <span class="brand-sub">· Métreur IA</span></div>
+  <div class="client-select-wrap">
+    <select id="clientSelect" class="select-client" onchange="onClientChange()"></select>
+    <button class="btn btn-sm" onclick="openClientModal()">+ Client</button>
+    <button class="btn btn-sm btn-danger" onclick="deleteCurrentClient()">Suppr.</button>
+  </div>
+  <div class="tabs" id="lotTabs"></div>
+  <button class="btn btn-sm" onclick="openLotsModal()" title="Ajouter, renommer ou supprimer des lots">⚙ Lots</button>
+  <div class="spacer"></div>
+  <div class="status-line" id="cloudStatus" style="margin:0;max-width:320px;"><span class="dot" id="cloudDot"></span><span id="cloudLabel" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="Connexion...">Connexion...</span></div>
+  <button class="btn btn-sm" onclick="openShareModal()" title="Exporter / importer toutes les données pour les partager">⇅ Partager</button>
+  <div class="gear" onclick="openSettingsModal()" title="Paramètres IA">⚙</div>
+</div>
+
+<div class="wrap" id="mainWrap"></div>
+
+<!-- Modal: nouveau client -->
+<div class="modal-bg" id="clientModal">
+  <div class="modal">
+    <h3>Nouveau client / chantier</h3>
+    <div class="field"><label>Nom du client</label><input id="newClientNom" placeholder="ex: SCI GLC"></div>
+    <div class="field"><label>Adresse du chantier</label><input id="newClientAdresse" placeholder="ex: 14 chemin des Pignès, 31140 Pechbonieu"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('clientModal')">Annuler</button>
+      <button class="btn btn-primary" onclick="createClient()">Créer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: parametres -->
+<div class="modal-bg" id="settingsModal">
+  <div class="modal" style="max-width:500px;">
+    <h3>Paramètres</h3>
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-faint);margin:2px 0 10px;">IA (Anthropic)</div>
+    <div class="field"><label>Modèle</label><input id="modelInput" placeholder="claude-sonnet-4-5-20250929"></div>
+    <div class="hint" style="margin-bottom:10px;">La clé API Anthropic est configurée une seule fois côté serveur (variable d'environnement) —
+      elle n'est plus saisie ici et n'est jamais visible dans le navigateur.</div>
+
+    <div style="border-top:1px solid var(--border);padding-top:14px;">
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-faint);margin:0 0 10px;">Espace de travail partagé</div>
+      <div class="hint">Toutes les données (clients, lots, métrés) sont stockées sur le serveur et synchronisées automatiquement entre
+        vous et vos collègues ayant le mot de passe de l'espace de travail (~4 secondes de délai). Pour changer de mot de passe, utilisez le bouton
+        "⇅ Partager".</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('settingsModal')">Annuler</button>
+      <button class="btn btn-primary" onclick="saveSettings()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: mot de passe de l'espace de travail -->
+<div class="modal-bg" id="pwModal">
+  <div class="modal" style="max-width:420px;">
+    <h3>Espace de travail Easy Chantier</h3>
+    <div class="field"><label>Mot de passe partagé</label><input id="pwInput" type="password" placeholder="Mot de passe" onkeydown="if(event.key==='Enter') submitPassword();"></div>
+    <div class="hint" id="pwHint">Demandez ce mot de passe à la personne qui a déployé l'outil (défini dans les paramètres du projet Vercel).</div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" style="width:100%;" onclick="submitPassword()">Entrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: partage / export-import des donnees -->
+<div class="modal-bg" id="shareModal">
+  <div class="modal" style="max-width:500px;">
+    <h3>Partager avec un collègue</h3>
+    <div class="hint" style="margin-bottom:14px;">Toutes les données sont déjà partagées et synchronisées automatiquement entre toutes les
+      personnes qui ouvrent cette même adresse avec le mot de passe de l'espace de travail — il n'y a rien à faire de plus.
+      Donnez-leur simplement l'adresse du site et le mot de passe.</div>
+
+    <button class="btn btn-primary" style="width:100%;" onclick="exportAllData()">⬇ Exporter une sauvegarde (.json)</button>
+
+    <div style="border-top:1px solid var(--border);margin:18px 0 14px;padding-top:14px;">
+      <div class="field"><label>Importer une sauvegarde (.json)</label><input type="file" id="importFileInput" accept="application/json"></div>
+      <div class="hint">⚠ L'import <b>remplace entièrement</b> les données actuelles de l'espace de travail (tous les clients), pour
+        tout le monde. Exportez d'abord une sauvegarde si vous ne voulez rien perdre.</div>
+      <button class="btn" style="width:100%;margin-top:8px;" onclick="importAllData()">⬆ Importer (remplace tout)</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('shareModal')">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: nouveau produit catalogue -->
+<div class="modal-bg" id="catModal">
+  <div class="modal">
+    <h3>Ajouter au catalogue</h3>
+    <div class="field"><label>Désignation</label><input id="catNom" placeholder="ex: Plaque BA13 hydrofuge"></div>
+    <div class="field-row">
+      <div class="field"><label>Unité</label><input id="catUnite" placeholder="m², u, ml..."></div>
+      <div class="field"><label>PU HT (€)</label><input id="catPu" type="number" step="0.01" placeholder="0.00"></div>
+    </div>
+    <div class="field"><label>Description CCTP par défaut</label><textarea id="catDesc" rows="3" placeholder="Description technique type CCTP..."></textarea></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('catModal')">Annuler</button>
+      <button class="btn btn-primary" onclick="createCatalogItem()">Ajouter</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: gestion des lots -->
+<div class="modal-bg" id="lotsModal">
+  <div class="modal" style="max-width:560px;">
+    <h3>Gérer les lots — <span id="lotsModalClientName"></span></h3>
+    <div id="lotsList" style="margin-bottom:16px;"></div>
+    <div style="border-top:1px solid var(--border);padding-top:14px;">
+      <div class="field"><label>Nom du nouveau lot</label><input id="newLotNom" placeholder="ex: Démolition, Terrassement, Maçonnerie, VRD, Serrurerie..."></div>
+      <div class="field-row">
+        <div class="field"><label>Unité par défaut</label><input id="newLotUnite" placeholder="m², u, ml, m³..."></div>
+      </div>
+      <div class="field"><label>Instructions spécifiques pour l'IA (optionnel)</label><textarea id="newLotPrompt" rows="3" placeholder="ex: repère les éléments à démolir (cloisons, sols, réseaux) et calcule leur surface ou volume..."></textarea></div>
+      <button class="btn btn-primary" style="width:100%;" onclick="addLot()">+ Ajouter ce lot</button>
+    </div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal('lotsModal')">Fermer</button></div>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   DONNEES DE REFERENCE
+   ========================================================= */
+// Liste de depart utilisee pour initialiser les lots d'un NOUVEAU client.
+// Chaque client a ensuite sa PROPRE liste de lots (data.lotDefs), modifiable
+// librement (ajout/suppression) via le bouton "⚙ Lots" - voir openLotsModal().
+const DEFAULT_LOTS = [
+  {key:'demolition',   label:'Démolition',          unit_default:'m²'},
+  {key:'terrassement', label:'Terrassement',        unit_default:'m³'},
+  {key:'maconnerie',   label:'Maçonnerie',          unit_default:'m²'},
+  {key:'placo',        label:'Placo / Cloisons',    unit_default:'m²'},
+  {key:'cvc',          label:'CVC',                 unit_default:'u'},
+  {key:'plomberie',    label:'Plomberie',           unit_default:'u'},
+  {key:'electricite',  label:'Électricité',         unit_default:'u'},
+  {key:'menuiseries',  label:'Menuiseries',         unit_default:'u'},
+  {key:'carrelage',    label:'Carrelage / Sols',    unit_default:'m²'},
+  {key:'peinture',     label:'Peinture',            unit_default:'m²'},
+];
+const RECAP_KEY = 'recap';
+
+// Instructions specifiques par lot envoyees a l'IA - capitalisent sur la methode
+// utilisee manuellement (lecture de legende, hypotheses de calcul).
+const DEFAULT_LOT_PROMPTS = {
+  demolition: (ctx) => `Tu analyses un plan DCE (plan de démolition, ou plan existant/projeté), pour un métré de DÉMOLITION.
+Méthode à appliquer :
+1. Repère la légende démolition si elle existe (murs/cloisons à démolir, sols/revêtements à déposer, réseaux à déposer, éléments à conserver) — souvent en trait renforcé, hachuré ou coloré (conventions variables selon le plan).
+2. Pour chaque élément à démolir, indique la pièce concernée, la nature (cloison, mur porteur, sol, plafond, réseau, sanitaire...), et calcule la quantité : longueur × hauteur sous plafond ${ctx.hauteur} m pour les parois verticales, surface au sol pour les dépose de revêtements.
+3. Ne compte QUE ce qui est explicitement marqué à démolir/déposer — ne compte jamais les éléments conservés.
+4. Si la légende démolition n'est pas identifiable avec certitude sur ce plan, dis-le clairement dans les notes plutôt que d'inventer une quantité.`,
+
+  terrassement: (ctx) => `Tu analyses un plan DCE (plan de masse, plan VRD ou plan de terrassement), pour un métré de TERRASSEMENT.
+Méthode à appliquer :
+1. Repère les zones de terrassement (fouilles, décaissement, tranchées réseaux) et leurs cotes (longueur, largeur, profondeur) si indiquées.
+2. Calcule les volumes en m³ (longueur × largeur × profondeur) quand les 3 dimensions sont disponibles ; sinon donne la surface en m² et indique la profondeur manquante dans les notes.
+3. Une ligne par zone/ouvrage de terrassement identifié (ex : fouille en rigole pour fondations, décaissement de dallage, tranchée VRD...).`,
+
+  maconnerie: (ctx) => `Tu analyses un plan DCE (plan de masse, plan de fondations ou plan de repérage général), pour un métré de MAÇONNERIE.
+Méthode à appliquer :
+1. Repère les ouvrages de maçonnerie (murs porteurs, fondations, poteaux, linteaux, appuis, planchers) et leurs cotes.
+2. Pour les murs/voiles : longueur × hauteur sous plafond ${ctx.hauteur} m (sauf hauteur différente indiquée explicitement). Pour les éléments ponctuels (poteaux, linteaux) : compte le nombre d'unités avec leur dimension si disponible.
+3. Une ligne par pièce/ouvrage et type d'élément.`,
+
+  placo: (ctx) => `Tu analyses un plan DCE de repérage PLACO / CLOISONS (format PDF, vue en plan).
+Méthode à appliquer, strictement :
+1. Repère la légende du plan (couleurs / hachures) et ce que chaque couleur représente (doublage, cloison, hydrofuge, coupe-feu, etc.).
+2. Repère chaque pièce et sa surface au sol si elle est indiquée sur le plan (m²).
+3. Pour chaque tracé coloré, mesure sa longueur développée à partir des cotes imprimées sur le plan (jamais à l'échelle visuelle si une cote existe).
+4. Hauteur sous plafond à utiliser pour tous les calculs de surface verticale : ${ctx.hauteur} m (sauf muret coté ou hauteur différente indiquée explicitement sur le plan).
+5. Un DOUBLAGE (contre mur existant / périphérie) = 1 seule face de plaque = longueur × hauteur.
+6. Une CLOISON (paroi autoportante créée, séparation intérieure) = 2 faces de plaque (une de chaque côté) = 2 × longueur × hauteur.
+7. Indique bien pour chaque ligne si c'est un doublage (1 face) ou une cloison (2 faces) dans le champ "element".
+8. Si une cote est absente ou illisible, indique la ligne quand même avec ta meilleure estimation et écris "à vérifier sur site" dans la description.`,
+
+  cvc: (ctx) => `Tu analyses un plan DCE CVC (climatisation / ventilation), format PDF, vue en plan.
+Méthode à appliquer :
+1. Repère la légende CVC (VMC, grille de soufflage, grille de reprise, circuit gainable, unité intérieure, unité extérieure, trappe d'accès, etc.) et le symbole graphique associé à chaque terme.
+2. Pour chaque symbole trouvé sur le plan, identifie dans quelle pièce il se situe (au besoin la pièce la plus proche si le symbole est sur une cloison mitoyenne).
+3. Compte le nombre d'occurrences de chaque symbole, par pièce. Une ligne du résultat = un couple (pièce, type de symbole) avec sa quantité.
+4. Les circuits gainables (lignes en pointillés reliant les bouches) ne sont pas comptés comme une quantité mais peuvent être mentionnés en note.
+5. Si une unité extérieure est en façade / hors volume habitable, indique la pièce "Extérieur".`,
+
+  plomberie: (ctx) => `Tu analyses un plan DCE PLOMBERIE, format PDF, vue en plan.
+Méthode à appliquer :
+1. Repère la légende plomberie (évacuations, arrivées eau chaude/froide, arrivées simples, nourrices, colonne plomberie, chauffe-eau/cumulus, trappe d'accès, fausse toutes eaux, etc.).
+2. Pour chaque symbole trouvé, identifie la pièce et l'appareil concerné si visible (évier, lavabo, WC, lave-linge, lave-vaisselle...).
+3. Compte le nombre d'occurrences de chaque symbole par pièce.
+4. Regroupe par pièce et par type de symbole dans le résultat.`,
+
+  electricite: (ctx) => `Tu analyses un plan DCE ÉLECTRICITÉ, format PDF, vue en plan.
+Méthode à appliquer :
+1. Repère la légende électrique (prises, interrupteurs, va-et-vient, variateurs, spots, plafonniers, appliques, détecteurs de mouvement, RJ45, TV, tableau électrique, etc.).
+2. Distingue les symboles avec repère texte net (fiables) des pictogrammes seuls répétitifs (prises, spots...) qui sont plus sujets à erreur de comptage sur un plan dense — indique un niveau de confiance "fiable" ou "estimation" dans le champ description pour ces lignes.
+3. Compte par pièce et par type de symbole.`,
+
+  menuiseries: (ctx) => `Tu analyses un plan DCE avec des menuiseries (portes / fenêtres), format PDF, vue en plan.
+Méthode à appliquer :
+1. Repère chaque porte et fenêtre représentée (traits d'ouvrant, tableaux de baie) et ses cotes si indiquées (largeur, parfois hauteur).
+2. Indique la pièce, le type (porte intérieure, porte d'entrée, fenêtre, baie coulissante, porte de garage...), et la dimension si disponible (ex: "83x204 cm").
+3. Compte 1 ligne par menuiserie si les cotes diffèrent, ou regroupe en quantité si plusieurs menuiseries identiques dans une même pièce.
+4. Unité = "u" (unité), quantité = nombre de menuiseries de ce type/dimension.`,
+
+  carrelage: (ctx) => `Tu analyses un plan DCE (plan de repérage général ou plan placo/plomberie servant de plan de base), pour un métré de CARRELAGE / REVÊTEMENT DE SOL.
+Méthode à appliquer :
+1. Relève la surface au sol de chaque pièce à partir des m² imprimés sur le plan (valeur déjà calculée par l'architecte, à privilégier).
+2. Une ligne par pièce, avec la surface telle qu'indiquée sur le plan.
+3. Indique dans la description le revêtement supposé si mentionné (carrelage, parquet...) sinon laisse générique "revêtement de sol à définir".`,
+
+  peinture: (ctx) => `Tu analyses un plan DCE (plan de repérage général), pour un métré de PEINTURE (murs + plafonds).
+Méthode à appliquer :
+1. Pour chaque pièce, calcule la surface de plafond = surface au sol indiquée sur le plan (en m²).
+2. Calcule la surface de murs = périmètre de la pièce × hauteur sous plafond ${ctx.hauteur} m. Si le périmètre exact n'est pas mesurable avec certitude à partir des cotes visibles, fais une estimation à partir de la forme et de la surface au sol de la pièce et indique "estimation - à vérifier sur site" dans la description.
+3. Crée 2 lignes par pièce : une pour "Peinture murs" (m²) et une pour "Peinture plafond" (m²). Ne déduis pas les ouvertures (portes/fenêtres) sauf si tu as une bonne raison de le faire — indique-le dans la description si tu le fais.`,
+};
+
+// Prompt utilise pour un lot AJOUTE PAR L'UTILISATEUR (pas dans DEFAULT_LOT_PROMPTS).
+// lotDef.promptExtra = instructions optionnelles saisies lors de la création du lot.
+function genericLotPrompt(lotDef, ctx){
+  return `Tu analyses un plan DCE (format PDF, vue en plan) pour le lot "${lotDef.label}".
+Méthode à appliquer :
+1. Repère la légende du plan et identifie tous les éléments/symboles/tracés pertinents pour ce lot.
+2. Pour chaque élément trouvé, identifie la pièce concernée (ou la zone si le plan n'est pas découpé en pièces), et calcule la quantité : compte les occurrences pour un élément ponctuel (symbole), ou mesure une longueur/surface/volume à partir des cotes imprimées sur le plan pour un élément linéaire ou surfacique.
+3. Hauteur sous plafond à utiliser si nécessaire pour un calcul de surface verticale : ${ctx.hauteur} m.
+4. Si une cote est absente ou illisible, indique la ligne quand même avec ta meilleure estimation et écris "à vérifier sur site" dans la description.${lotDef.promptExtra ? '\n5. Instructions spécifiques supplémentaires données par l\'utilisateur pour ce lot :\n' + lotDef.promptExtra : ''}`;
+}
+
+const RESPONSE_FORMAT_INSTRUCTIONS = `
+Réponds UNIQUEMENT avec un bloc JSON (rien avant, rien après), au format strict suivant :
+{
+  "notes": ["remarque générale 1", "remarque générale 2"],
+  "items": [
+    {"piece": "Nom de la pièce", "element": "Nom court de l'élément/symbole", "quantite": 12.5, "unite": "m²", "description": "Description technique courte, style CCTP, incluant la méthode/l'hypothèse de calcul utilisée."}
+  ]
+}
+Règles :
+- "quantite" est un nombre (pas de texte, pas d'unité dedans).
+- Une ligne par (pièce, élément) - ne fusionne pas des éléments différents sur une même ligne.
+- Le champ "notes" contient les points de vigilance globaux (cotes manquantes, éléments illisibles, hypothèses fortes).
+- N'ajoute aucun texte hors de ce JSON.`;
+
+// Catalogue de depart (quelques exemples par lot, l'utilisateur peut en ajouter/modifier)
+const DEFAULT_CATALOG = {
+  demolition: [
+    {nom:'Dépose cloison', unite:'m²', pu:18, description:"Démolition et évacuation de cloison existante, tri et évacuation des gravats en déchetterie agréée."},
+    {nom:'Dépose revêtement de sol', unite:'m²', pu:12, description:"Dépose de revêtement de sol existant (carrelage, parquet...), évacuation des gravats."},
+  ],
+  terrassement: [
+    {nom:'Fouille en rigole', unite:'m³', pu:35, description:"Terrassement en fouille en rigole pour fondations, évacuation des déblais."},
+    {nom:'Décaissement dallage', unite:'m³', pu:28, description:"Décaissement de terre végétale pour réalisation de dallage, évacuation des déblais."},
+  ],
+  maconnerie: [
+    {nom:'Mur en agglos', unite:'m²', pu:75, description:"Fourniture et pose de mur en blocs béton (agglos) creux ou pleins selon plan, joints et enduits compris."},
+    {nom:'Linteau béton', unite:'u', pu:120, description:"Fourniture et pose de linteau béton armé préfabriqué au-dessus d'une baie, selon note de calcul."},
+  ],
+  placo: [
+    {nom:'Plaque BA13 standard', unite:'m²', pu:14, description:"Fourniture et pose de plaque de plâtre BA13 standard sur ossature métallique, y compris bandes et enduits de finition, conforme DTU 25.41."},
+    {nom:'Plaque BA13 hydrofuge', unite:'m²', pu:17, description:"Fourniture et pose de plaque de plâtre hydrofuge BA13 (pièces humides), sur ossature métallique, y compris traitement des joints, conforme DTU 25.41."},
+    {nom:'Plaque coupe-feu', unite:'m²', pu:26, description:"Fourniture et pose de plaque coupe-feu (type Placo Feu BA13/BA25 selon degré requis), sur ossature métallique renforcée, conforme au classement feu exigé."},
+  ],
+  cvc: [
+    {nom:'Bouche VMC', unite:'u', pu:45, description:"Fourniture et pose de bouche d'extraction VMC, raccordement au réseau gainable existant/projeté."},
+    {nom:'Grille de soufflage', unite:'u', pu:60, description:"Fourniture et pose de grille de soufflage sur réseau gainable, réglage du débit selon note de calcul."},
+    {nom:'Unité intérieure', unite:'u', pu:850, description:"Fourniture et pose d'unité intérieure de climatisation gainable, raccordement frigorifique et électrique, mise en service."},
+    {nom:'Unité extérieure', unite:'u', pu:1400, description:"Fourniture et pose d'unité extérieure de climatisation, support anti-vibratile, raccordement frigorifique."},
+  ],
+  plomberie: [
+    {nom:'Point évacuation', unite:'u', pu:95, description:"Création d'un point d'évacuation eaux usées, raccordement au réseau existant, conforme DTU 60.11."},
+    {nom:'Point arrivée eau C/F', unite:'u', pu:110, description:"Création d'un point d'alimentation eau chaude et eau froide, raccordement au réseau existant, conforme DTU 60.1."},
+  ],
+  electricite: [
+    {nom:'Prise 2P+T', unite:'u', pu:55, description:"Fourniture et pose de prise de courant 2P+T 16A, tirage de ligne depuis tableau, conforme NF C 15-100."},
+    {nom:'Point lumière + interrupteur', unite:'u', pu:75, description:"Fourniture et pose d'un point lumière commandé par interrupteur, tirage de ligne, conforme NF C 15-100."},
+  ],
+  menuiseries: [
+    {nom:'Porte intérieure', unite:'u', pu:280, description:"Fourniture et pose de bloc-porte intérieur (huisserie + vantail), quincaillerie standard."},
+    {nom:'Fenêtre PVC double vitrage', unite:'u', pu:650, description:"Fourniture et pose de fenêtre PVC double vitrage 4/16/4, y compris habillage intérieur et extérieur."},
+  ],
+  carrelage: [
+    {nom:'Carrelage grès cérame', unite:'m²', pu:55, description:"Fourniture et pose de carrelage grès cérame sur chape, format à définir, joints et plinthes compris."},
+  ],
+  peinture: [
+    {nom:'Peinture murs', unite:'m²', pu:22, description:"Préparation des supports, application peinture acrylique mate sur murs, 2 couches, teinte au choix du client."},
+    {nom:'Peinture plafond', unite:'m²', pu:20, description:"Préparation des supports, application peinture acrylique mate sur plafond, 2 couches, blanc."},
+  ],
+};
+
+/* =========================================================
+   ETAT / PERSISTANCE
+   ========================================================= */
+const STORE_KEY = 'easychantier_metreur_v1';
+let state = loadState();
+let activeLot = 'placo';
+
+function defaultLotData(){
+  return {hauteur: 3.0, planName:'', planDataUrl:'', items:[], notes:[]};
+}
+function newClientData(){
+  const d = {lotDefs: DEFAULT_LOTS.map(l=>({...l})), lots:{}, catalog:{}};
+  d.lotDefs.forEach(l => { d.lots[l.key] = defaultLotData(); d.catalog[l.key] = (DEFAULT_CATALOG[l.key]||[]).map((p,i)=>({id:l.key+'_'+i, ...p})); });
+  return d;
+}
+function loadState(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if(raw) return JSON.parse(raw);
+  }catch(e){}
+  return {
+    settings:{model:'claude-sonnet-4-5-20250929'},
+    clients:[], currentClientId:null, data:{}
+  };
+}
+// Enregistre dans le navigateur (cache local) ET programme un envoi vers le serveur partage.
+function saveState(){ saveLocalOnly(); scheduleSync(); }
+// Enregistre uniquement en local, sans redeclencher de synchronisation serveur
+// (utilise quand on vient de RECEVOIR une mise a jour du serveur, pour eviter une boucle).
+function saveLocalOnly(){ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
+
+/* =========================================================
+   SYNCHRONISATION SERVEUR (Vercel + KV) — mot de passe partage
+   ========================================================= *
+   Principe : toutes les donnees (state) sont stockees sur le serveur (Vercel KV),
+   derriere une API /api/state protegee par un mot de passe d'espace de travail
+   (en-tete x-workspace-password, verifie cote serveur contre SITE_PASSWORD).
+   Chaque navigateur :
+   - recupere l'etat au demarrage (loadFromServer),
+   - interroge le serveur regulierement (polling ~4s) pour recevoir les
+     modifications faites par les autres navigateurs (quasi temps reel),
+   - pousse ses propres modifications (avec un leger debounce) a chaque saveState().
+   La cle API Anthropic n'est JAMAIS presente cote navigateur : l'analyse de plan
+   passe par /api/analyze-plan, qui l'utilise cote serveur uniquement. */
+const WORKSPACE_PW_KEY = 'easychantier_workspace_pw';
+let applyingRemoteChange = false;
+let syncTimer = null;
+let pollTimer = null;
+let lastServerJSON = null;
+
+function getWorkspacePassword(){ return localStorage.getItem(WORKSPACE_PW_KEY) || ''; }
+function setWorkspacePassword(pw){ localStorage.setItem(WORKSPACE_PW_KEY, pw); }
+
+function updateCloudStatus(kind, label){
+  const dot = document.getElementById('cloudDot');
+  const lab = document.getElementById('cloudLabel');
+  if(!dot || !lab) return;
+  dot.className = 'dot' + (kind==='busy' ? ' busy' : kind==='ok' ? ' ok' : kind==='err' ? ' err' : '');
+  const labels = {off:'Non connecté', busy:'Synchronisation…', ok:'Synchronisé', err:'Erreur de synchronisation'};
+  const text = label || labels[kind] || '';
+  lab.textContent = text;
+  lab.title = text;
+  if(kind==='err') console.warn('[EasyChantier] Statut sync :', text);
+}
+
+// Wrapper fetch qui ajoute le mot de passe d'espace de travail, et gere le cas 401
+// (mot de passe absent/incorrect) en redemandant la saisie.
+async function apiFetch(path, opts){
+  opts = opts || {};
+  opts.headers = Object.assign({'content-type':'application/json', 'x-workspace-password': getWorkspacePassword()}, opts.headers||{});
+  const resp = await fetch(path, opts);
+  if(resp.status === 401){
+    updateCloudStatus('err','Mot de passe incorrect');
+    showPasswordModal('Mot de passe incorrect — merci de réessayer.');
+    throw new Error('Non autorisé (mot de passe incorrect)');
+  }
+  return resp;
+}
+
+async function loadFromServer(initial){
+  updateCloudStatus('busy');
+  try{
+    const resp = await apiFetch('/api/state', {method:'GET'});
+    if(!resp.ok) throw new Error('HTTP '+resp.status);
+    const json = await resp.json();
+    const serverJSON = JSON.stringify(json.data || null);
+    if(json.data && serverJSON !== lastServerJSON){
+      lastServerJSON = serverJSON;
+      applyingRemoteChange = true;
+      const keepModel = state.settings && state.settings.model;
+      state = json.data;
+      if(!state.settings) state.settings = {};
+      if(!state.settings.model) state.settings.model = keepModel || 'claude-sonnet-4-5-20250929';
+      saveLocalOnly();
+      ensureActiveLotValid();
+      renderAll();
+      applyingRemoteChange = false;
+    } else if(!json.data && initial){
+      // Aucune donnee serveur encore presente : on pousse l'etat local actuel comme version initiale.
+      await pushToServer();
+    }
+    updateCloudStatus('ok');
+  }catch(err){
+    if(!/Non autorisé/.test(err.message||'')){
+      console.error('[EasyChantier] loadFromServer a échoué :', err);
+      updateCloudStatus('err','Erreur : ' + err.message);
+    }
+  }
+}
+
+function scheduleSync(){
+  if(applyingRemoteChange || !getWorkspacePassword()) return;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(pushToServer, 900);
+}
+async function pushToServer(){
+  updateCloudStatus('busy');
+  try{
+    const resp = await apiFetch('/api/state', {method:'PUT', body: JSON.stringify({data: state})});
+    if(!resp.ok) throw new Error('HTTP '+resp.status);
+    lastServerJSON = JSON.stringify(state);
+    updateCloudStatus('ok');
+  }catch(err){
+    if(!/Non autorisé/.test(err.message||'')){
+      console.error('[EasyChantier] pushToServer a échoué :', err);
+      updateCloudStatus('err','Échec d\'envoi : ' + err.message);
+    }
+  }
+}
+function startPolling(){
+  clearInterval(pollTimer);
+  pollTimer = setInterval(()=>loadFromServer(false), 4000);
+}
+
+function showPasswordModal(hintMsg){
+  const hint = document.getElementById('pwHint');
+  if(hint) hint.textContent = hintMsg || "Demandez ce mot de passe à la personne qui a déployé l'outil (défini dans les paramètres du projet Vercel).";
+  document.getElementById('pwInput').value = '';
+  document.getElementById('pwModal').classList.add('show');
+}
+async function submitPassword(){
+  const pw = document.getElementById('pwInput').value;
+  if(!pw){ alert('Merci de saisir le mot de passe.'); return; }
+  setWorkspacePassword(pw);
+  document.getElementById('pwModal').classList.remove('show');
+  await startApp();
+}
+async function ensureWorkspacePassword(){
+  if(getWorkspacePassword()){ await startApp(); return; }
+  showPasswordModal();
+}
+async function startApp(){
+  renderAll();
+  await loadFromServer(true);
+  ensureActiveLotValid();
+  renderAll();
+  startPolling();
+}
+
+function currentClient(){ return state.clients.find(c=>c.id===state.currentClientId); }
+function currentData(){
+  if(!state.currentClientId) return null;
+  if(!state.data[state.currentClientId]) state.data[state.currentClientId] = newClientData();
+  const d = state.data[state.currentClientId];
+  // migration : anciens clients crees avant l'introduction des lots personnalisables
+  if(!d.lotDefs) d.lotDefs = DEFAULT_LOTS.map(l=>({...l})).filter(l=>d.lots && d.lots[l.key]);
+  return d;
+}
+// Renvoie la liste des lots du client actuellement selectionne (liste vide si aucun client).
+function currentLots(){
+  const data = currentData();
+  return data ? data.lotDefs : [];
+}
+
+/* =========================================================
+   RENDU : TOP BAR / CLIENTS / TABS
+   ========================================================= */
+function renderClientSelect(){
+  const sel = document.getElementById('clientSelect');
+  sel.innerHTML = '';
+  if(state.clients.length===0){
+    const opt = document.createElement('option');
+    opt.textContent = 'Aucun client — cliquez sur + Client';
+    sel.appendChild(opt);
+    return;
+  }
+  state.clients.forEach(c=>{
+    const opt = document.createElement('option');
+    opt.value = c.id; opt.textContent = c.nom;
+    if(c.id===state.currentClientId) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+function onClientChange(){
+  state.currentClientId = document.getElementById('clientSelect').value;
+  saveState();
+  ensureActiveLotValid();
+  renderAll();
+}
+// S'assure que l'onglet actif existe bien pour le client courant (sinon bascule sur
+// le premier lot disponible, ou sur le Récapitulatif si aucun lot n'existe).
+function ensureActiveLotValid(){
+  if(activeLot === RECAP_KEY) return;
+  const lots = currentLots();
+  if(!lots.find(l=>l.key===activeLot)) activeLot = lots.length ? lots[0].key : RECAP_KEY;
+}
+function openClientModal(){
+  document.getElementById('newClientNom').value='';
+  document.getElementById('newClientAdresse').value='';
+  document.getElementById('clientModal').classList.add('show');
+}
+function closeModal(id){ document.getElementById(id).classList.remove('show'); }
+function createClient(){
+  const nom = document.getElementById('newClientNom').value.trim();
+  if(!nom){ alert('Merci de saisir un nom de client.'); return; }
+  const adresse = document.getElementById('newClientAdresse').value.trim();
+  const id = 'c_' + Date.now();
+  state.clients.push({id, nom, adresse});
+  state.data[id] = newClientData();
+  state.currentClientId = id;
+  saveState();
+  closeModal('clientModal');
+  renderAll();
+}
+function deleteCurrentClient(){
+  const c = currentClient();
+  if(!c) return;
+  if(!confirm('Supprimer le client "'+c.nom+'" et toutes ses données ? Cette action est irréversible.')) return;
+  state.clients = state.clients.filter(x=>x.id!==c.id);
+  delete state.data[c.id];
+  state.currentClientId = state.clients.length ? state.clients[0].id : null;
+  saveState();
+  renderAll();
+}
+
+function renderTabs(){
+  const wrap = document.getElementById('lotTabs');
+  wrap.innerHTML = '';
+  currentLots().forEach(l=>{
+    const b = document.createElement('button');
+    b.className = 'tab' + (activeLot===l.key ? ' active' : '');
+    b.textContent = l.label;
+    b.onclick = ()=>{ activeLot = l.key; renderMain(); renderTabs(); };
+    wrap.appendChild(b);
+  });
+  const addBtn = document.createElement('button');
+  addBtn.className = 'tab';
+  addBtn.style.color = 'var(--copper)';
+  addBtn.textContent = '+ Lot';
+  addBtn.title = 'Ajouter un lot (Démolition, Terrassement, Maçonnerie, VRD...)';
+  addBtn.onclick = openLotsModal;
+  wrap.appendChild(addBtn);
+  const b = document.createElement('button');
+  b.className = 'tab' + (activeLot===RECAP_KEY ? ' active' : '');
+  b.textContent = 'Récapitulatif';
+  b.onclick = ()=>{ activeLot = RECAP_KEY; renderMain(); renderTabs(); };
+  wrap.appendChild(b);
+}
+
+/* =========================================================
+   SETTINGS MODAL
+   ========================================================= */
+function openSettingsModal(){
+  document.getElementById('modelInput').value = state.settings.model || 'claude-sonnet-4-5-20250929';
+  document.getElementById('settingsModal').classList.add('show');
+}
+function saveSettings(){
+  state.settings.model = document.getElementById('modelInput').value.trim() || 'claude-sonnet-4-5-20250929';
+  saveState();
+  closeModal('settingsModal');
+}
+
+/* =========================================================
+   PARTAGE : EXPORT / IMPORT DE TOUTES LES DONNEES
+   ========================================================= */
+function openShareModal(){
+  document.getElementById('importFileInput').value = '';
+  document.getElementById('shareModal').classList.add('show');
+}
+function exportAllData(){
+  const payload = JSON.parse(JSON.stringify(state)); // clone profond
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'EasyChantier_Donnees_' + new Date().toISOString().slice(0,10) + '.json';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+function importAllData(){
+  const input = document.getElementById('importFileInput');
+  const file = input.files[0];
+  if(!file){ alert('Merci de choisir un fichier .json à importer.'); return; }
+  if(!confirm('Cette action va REMPLACER toutes les données actuelles de ce navigateur (tous les clients) par celles du fichier importé. Continuer ?')) return;
+  const reader = new FileReader();
+  reader.onload = function(e){
+    try{
+      const imported = JSON.parse(e.target.result);
+      if(!imported || !Array.isArray(imported.clients) || typeof imported.data !== 'object'){
+        alert('Fichier invalide : ce ne semble pas être un export Easy Chantier Métreur IA.');
+        return;
+      }
+      const keepModel = state.settings && state.settings.model;
+      state = imported;
+      if(!state.settings) state.settings = {model:'claude-sonnet-4-5-20250929'};
+      if(!state.settings.model) state.settings.model = keepModel || 'claude-sonnet-4-5-20250929';
+      saveLocalOnly();
+      closeModal('shareModal');
+      activeLot = 'placo';
+      renderAll();
+      pushToServer();
+      alert('Import réussi : ' + state.clients.length + ' client(s) chargé(s). Synchronisation en cours vers le serveur partagé...');
+    }catch(err){
+      alert('Erreur de lecture du fichier : ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+/* =========================================================
+   RENDU PRINCIPAL
+   ========================================================= */
+function renderAll(){
+  renderClientSelect();
+  renderTabs();
+  renderMain();
+}
+
+function renderMain(){
+  const wrap = document.getElementById('mainWrap');
+  wrap.innerHTML = '';
+  if(!state.currentClientId){
+    wrap.innerHTML = '<div class="card"><div class="empty">Créez ou sélectionnez un client pour commencer.<br>Cliquez sur <b>+ Client</b> en haut de l\'écran.</div></div>';
+    return;
+  }
+  ensureActiveLotValid();
+  if(activeLot === RECAP_KEY){ renderRecap(wrap); return; }
+  if(currentLots().length===0){
+    wrap.innerHTML = '<div class="card"><div class="empty">Ce client n\'a aucun lot pour l\'instant.<br>Cliquez sur <b>⚙ Lots</b> en haut de l\'écran pour en ajouter (Démolition, Placo, CVC, Plomberie...).</div></div>';
+    return;
+  }
+  renderLotPanel(wrap, activeLot);
+}
+
+/* ---------- Panel d'un lot ---------- */
+function renderLotPanel(wrap, lotKey){
+  const lot = currentLots().find(l=>l.key===lotKey);
+  const data = currentData();
+  const lotData = data.lots[lotKey];
+  const catalog = data.catalog[lotKey];
+
+  // Carte upload / analyse IA
+  const card1 = document.createElement('div');
+  card1.className = 'card';
+  card1.innerHTML = `
+    <h2 style="justify-content:space-between;">
+      <span>Plan DCE — ${lot.label} ${lot.custom ? '<span class="badge manual" style="margin-left:6px;">lot personnalisé</span>' : ''}</span>
+      <button class="btn btn-sm btn-danger" onclick="deleteLot('${lotKey}')">Supprimer ce lot</button>
+    </h2>
+    <div class="upload-row">
+      <div>
+        <div class="dropzone" id="dz_${lotKey}">
+          <div class="dz-title">📄 Déposez le plan PDF ici, ou cliquez pour parcourir</div>
+          <div class="dz-sub">Format PDF uniquement — le plan est envoyé directement à l'API Anthropic pour analyse</div>
+          <input type="file" id="file_${lotKey}" accept="application/pdf">
+        </div>
+        <div id="chip_${lotKey}"></div>
+        <div class="status-line" id="status_${lotKey}"><span class="dot"></span><span>En attente d'un plan</span></div>
+      </div>
+      <div>
+        <div class="field"><label>Hauteur sous plafond (m) — utilisée si besoin pour les surfaces verticales</label><input type="number" step="0.01" id="hauteur_${lotKey}" value="${lotData.hauteur}"></div>
+        <button class="btn btn-primary" style="width:100%;margin-top:6px;" onclick="analyzePlan('${lotKey}')">✨ Analyser le plan avec l'IA</button>
+        <div class="hint">L'IA lit la légende du plan et calcule un premier jet de métré, ligne par ligne, éditable ensuite ci-dessous. Vérifiez toujours les résultats avant chiffrage définitif.</div>
+      </div>
+    </div>
+  `;
+  wrap.appendChild(card1);
+
+  // Carte tableau de metre
+  const card2 = document.createElement('div');
+  card2.className = 'card';
+  card2.innerHTML = `<h2>Métré ${lot.label} <span class="count-pill">${lotData.items.length} ligne(s)</span></h2>
+    <div id="notes_${lotKey}"></div>
+    <div class="table-scroll"><table>
+      <thead><tr>
+        <th style="width:14%">Pièce</th><th style="width:16%">Élément</th><th style="width:8%">Qté</th><th style="width:6%">Unité</th>
+        <th style="width:20%">Description CCTP</th><th style="width:16%">Produit catalogue</th>
+        <th style="width:9%">PU HT</th><th style="width:9%">Total HT</th><th style="width:3%"></th>
+      </tr></thead>
+      <tbody id="tbody_${lotKey}"></tbody>
+    </table></div>
+    <div class="table-foot">
+      <button class="btn btn-sm" onclick="addRow('${lotKey}')">+ Ajouter une ligne</button>
+      <div class="total-line"><span>Total HT ${lot.label}</span>${fmt(lotTotal(lotKey))}</div>
+    </div>`;
+  wrap.appendChild(card2);
+  renderRows(lotKey);
+  renderNotes(lotKey);
+
+  // Carte catalogue
+  const card3 = document.createElement('div');
+  card3.className = 'card';
+  card3.innerHTML = `<h2>Catalogue — ${lot.label} <span class="count-pill">${catalog.length} produit(s)</span></h2>
+    <div class="catalog-grid" id="catalog_${lotKey}"></div>
+    <div style="margin-top:12px;"><button class="btn btn-sm" onclick="openCatModal('${lotKey}')">+ Ajouter un produit au catalogue</button></div>`;
+  wrap.appendChild(card3);
+  renderCatalog(lotKey);
+
+  // Wire dropzone
+  const dz = document.getElementById('dz_'+lotKey);
+  const fileInput = document.getElementById('file_'+lotKey);
+  dz.onclick = ()=>fileInput.click();
+  dz.ondragover = (e)=>{ e.preventDefault(); dz.classList.add('drag'); };
+  dz.ondragleave = ()=> dz.classList.remove('drag');
+  dz.ondrop = (e)=>{ e.preventDefault(); dz.classList.remove('drag'); if(e.dataTransfer.files[0]) handleFile(lotKey, e.dataTransfer.files[0]); };
+  fileInput.onchange = (e)=>{ if(e.target.files[0]) handleFile(lotKey, e.target.files[0]); };
+  renderPlanChip(lotKey);
+}
+
+function renderPlanChip(lotKey){
+  const lotData = currentData().lots[lotKey];
+  const el = document.getElementById('chip_'+lotKey);
+  if(!el) return;
+  if(lotData.planName){
+    el.innerHTML = `<div class="plan-chip">📎 ${lotData.planName} <button onclick="removePlan('${lotKey}')">✕</button></div>`;
+  } else {
+    el.innerHTML = '';
+  }
+}
+function removePlan(lotKey){
+  const lotData = currentData().lots[lotKey];
+  lotData.planName=''; lotData.planDataUrl='';
+  saveState();
+  renderPlanChip(lotKey);
+}
+function handleFile(lotKey, file){
+  if(file.type !== 'application/pdf'){ alert('Merci de déposer un fichier PDF.'); return; }
+  const reader = new FileReader();
+  reader.onload = function(e){
+    const dataUrl = e.target.result; // data:application/pdf;base64,....
+    const data = currentData();
+    data.lots[lotKey].planName = file.name;
+    data.lots[lotKey].planDataUrl = dataUrl;
+    saveState();
+    renderPlanChip(lotKey);
+    setStatus(lotKey, 'ok', 'Plan chargé : ' + file.name + '. Cliquez sur "Analyser le plan avec l\'IA".');
+  };
+  reader.readAsDataURL(file);
+}
+function setStatus(lotKey, kind, text){
+  const el = document.getElementById('status_'+lotKey);
+  if(!el) return;
+  el.innerHTML = `<span class="dot ${kind==='busy'?'busy':kind==='ok'?'ok':kind==='err'?'err':''}"></span><span>${text}</span>`;
+}
+
+/* ---------- lignes du metre ---------- */
+function renderRows(lotKey){
+  const tbody = document.getElementById('tbody_'+lotKey);
+  if(!tbody) return;
+  const data = currentData();
+  const items = data.lots[lotKey].items;
+  const catalog = data.catalog[lotKey];
+  tbody.innerHTML = '';
+  if(items.length===0){
+    tbody.innerHTML = '<tr><td colspan="9"><div class="empty">Aucune ligne pour l\'instant. Analysez un plan avec l\'IA, ou ajoutez une ligne manuellement.</div></td></tr>';
+    return;
+  }
+  items.forEach((it, idx)=>{
+    const tr = document.createElement('tr');
+    const total = (Number(it.quantite)||0) * (Number(it.pu)||0);
+    it._total = total;
+    const catOptions = ['<option value="">— aucun —</option>'].concat(
+      catalog.map(c=>`<option value="${c.id}" ${it.produitId===c.id?'selected':''}>${escapeHtml(c.nom)}</option>`)
+    ).join('');
+    tr.innerHTML = `
+      <td><input value="${escapeAttr(it.piece)}" onchange="updateItem('${lotKey}',${idx},'piece',this.value)"></td>
+      <td><input value="${escapeAttr(it.element)}" onchange="updateItem('${lotKey}',${idx},'element',this.value)">
+          ${it.source==='ai' ? '<span class="badge ai">IA</span>' : '<span class="badge manual">manuel</span>'}</td>
+      <td class="num"><input type="number" step="0.01" value="${it.quantite}" onchange="updateItem('${lotKey}',${idx},'quantite',this.value)"></td>
+      <td><input value="${escapeAttr(it.unite)}" onchange="updateItem('${lotKey}',${idx},'unite',this.value)"></td>
+      <td><textarea onchange="updateItem('${lotKey}',${idx},'description',this.value)">${escapeHtml(it.description||'')}</textarea></td>
+      <td><select onchange="linkProduct('${lotKey}',${idx},this.value)">${catOptions}</select></td>
+      <td class="num"><input type="number" step="0.01" value="${it.pu||0}" onchange="updateItem('${lotKey}',${idx},'pu',this.value)"></td>
+      <td class="num">${fmt(total)}</td>
+      <td><button class="row-del" onclick="deleteRow('${lotKey}',${idx})">✕</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+function renderNotes(lotKey){
+  const el = document.getElementById('notes_'+lotKey);
+  const notes = currentData().lots[lotKey].notes || [];
+  if(!el) return;
+  if(notes.length===0){ el.innerHTML=''; return; }
+  el.innerHTML = '<div class="hint" style="margin-bottom:12px;"><b>⚠ Points de vigilance IA :</b><br>' + notes.map(n=>'• '+escapeHtml(n)).join('<br>') + '</div>';
+}
+
+function updateItem(lotKey, idx, field, value){
+  const items = currentData().lots[lotKey].items;
+  if(field==='quantite' || field==='pu') value = parseFloat(value)||0;
+  items[idx][field] = value;
+  saveState();
+  renderRows(lotKey); // refresh totals
+  refreshTotalLine(lotKey);
+}
+function linkProduct(lotKey, idx, produitId){
+  const data = currentData();
+  const items = data.lots[lotKey].items;
+  const cat = data.catalog[lotKey].find(c=>c.id===produitId);
+  items[idx].produitId = produitId || null;
+  if(cat){
+    items[idx].pu = cat.pu;
+    if(!items[idx].description) items[idx].description = cat.description;
+    if(!items[idx].unite) items[idx].unite = cat.unite;
+  }
+  saveState();
+  renderRows(lotKey);
+  refreshTotalLine(lotKey);
+}
+function addRow(lotKey){
+  const lot = currentLots().find(l=>l.key===lotKey);
+  currentData().lots[lotKey].items.push({piece:'', element:'', quantite:0, unite:lot.unit_default, description:'', produitId:null, pu:0, source:'manual'});
+  saveState();
+  renderRows(lotKey);
+  refreshCountPill(lotKey);
+}
+function deleteRow(lotKey, idx){
+  currentData().lots[lotKey].items.splice(idx,1);
+  saveState();
+  renderRows(lotKey);
+  refreshTotalLine(lotKey);
+  refreshCountPill(lotKey);
+}
+function lotTotal(lotKey){
+  const items = currentData().lots[lotKey].items;
+  return items.reduce((a,it)=> a + (Number(it.quantite)||0)*(Number(it.pu)||0), 0);
+}
+function refreshTotalLine(lotKey){
+  const els = document.querySelectorAll('.total-line');
+  els.forEach(el=>{
+    if(el.closest('.card').querySelector('h2').textContent.includes(currentLots().find(l=>l.key===lotKey).label)){
+      el.innerHTML = '<span>Total HT '+currentLots().find(l=>l.key===lotKey).label+'</span>'+fmt(lotTotal(lotKey));
+    }
+  });
+}
+function refreshCountPill(lotKey){
+  renderTabs();
+}
+
+/* ---------- catalogue ---------- */
+function renderCatalog(lotKey){
+  const el = document.getElementById('catalog_'+lotKey);
+  const catalog = currentData().catalog[lotKey];
+  if(!el) return;
+  if(catalog.length===0){ el.innerHTML = '<div class="empty">Catalogue vide.</div>'; return; }
+  el.innerHTML = catalog.map(c=>`
+    <div class="cat-card">
+      <div class="cn">${escapeHtml(c.nom)}</div>
+      <div class="cd">${escapeHtml(c.description||'')}</div>
+      <div class="cp">${fmt(c.pu)} <span class="cu">/ ${escapeHtml(c.unite)}</span></div>
+      <div class="cat-card-actions">
+        <button class="btn btn-sm" onclick="deleteCatalogItem('${lotKey}','${c.id}')">Supprimer</button>
+      </div>
+    </div>`).join('');
+}
+let catModalLot = null;
+function openCatModal(lotKey){
+  catModalLot = lotKey;
+  document.getElementById('catNom').value='';
+  document.getElementById('catUnite').value='';
+  document.getElementById('catPu').value='';
+  document.getElementById('catDesc').value='';
+  document.getElementById('catModal').classList.add('show');
+}
+function createCatalogItem(){
+  const nom = document.getElementById('catNom').value.trim();
+  if(!nom){ alert('Merci de saisir une désignation.'); return; }
+  const unite = document.getElementById('catUnite').value.trim() || 'u';
+  const pu = parseFloat(document.getElementById('catPu').value)||0;
+  const description = document.getElementById('catDesc').value.trim();
+  const catalog = currentData().catalog[catModalLot];
+  catalog.push({id: catModalLot+'_'+Date.now(), nom, unite, pu, description});
+  saveState();
+  closeModal('catModal');
+  renderCatalog(catModalLot);
+}
+function deleteCatalogItem(lotKey, id){
+  const data = currentData();
+  data.catalog[lotKey] = data.catalog[lotKey].filter(c=>c.id!==id);
+  saveState();
+  renderCatalog(lotKey);
+}
+
+/* =========================================================
+   GESTION DES LOTS (ajout / suppression, propre a chaque client)
+   ========================================================= */
+function slugify(s){
+  return s.toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'') || 'lot';
+}
+function openLotsModal(){
+  if(!state.currentClientId){ alert('Sélectionnez ou créez d\'abord un client (bouton + Client en haut de l\'écran).'); return; }
+  document.getElementById('lotsModalClientName').textContent = currentClient().nom;
+  document.getElementById('newLotNom').value='';
+  document.getElementById('newLotUnite').value='';
+  document.getElementById('newLotPrompt').value='';
+  renderLotsList();
+  document.getElementById('lotsModal').classList.add('show');
+}
+function renderLotsList(){
+  const el = document.getElementById('lotsList');
+  const lots = currentLots();
+  if(lots.length===0){ el.innerHTML = '<div class="empty">Aucun lot pour ce client. Ajoutez-en un ci-dessous.</div>'; return; }
+  el.innerHTML = lots.map(l=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--surface-3);">
+      <div style="flex:1;">
+        <div style="font-weight:600;font-size:13px;">${escapeHtml(l.label)}</div>
+        <div style="font-size:11px;color:var(--text-faint);">Unité par défaut : ${escapeHtml(l.unit_default)} ${l.custom ? '· lot personnalisé' : '· lot standard'}</div>
+      </div>
+      <button class="btn btn-sm btn-danger" onclick="deleteLot('${l.key}')">Supprimer</button>
+    </div>`).join('');
+}
+function addLot(){
+  const nom = document.getElementById('newLotNom').value.trim();
+  if(!nom){ alert('Merci de saisir un nom de lot.'); return; }
+  const unite = document.getElementById('newLotUnite').value.trim() || 'u';
+  const promptExtra = document.getElementById('newLotPrompt').value.trim();
+  const data = currentData();
+  let key = slugify(nom);
+  if(data.lotDefs.some(l=>l.key===key)) key = key + '_' + Date.now().toString().slice(-5);
+  data.lotDefs.push({key, label:nom, unit_default:unite, custom:true, promptExtra});
+  data.lots[key] = defaultLotData();
+  data.catalog[key] = [];
+  saveState();
+  activeLot = key;
+  document.getElementById('newLotNom').value='';
+  document.getElementById('newLotUnite').value='';
+  document.getElementById('newLotPrompt').value='';
+  renderLotsList();
+  renderAll();
+}
+function deleteLot(key){
+  const data = currentData();
+  const lot = data.lotDefs.find(l=>l.key===key);
+  if(!lot) return;
+  if(!confirm('Supprimer le lot "'+lot.label+'" et toutes ses données (plan, métré, catalogue) pour ce client ? Cette action est irréversible.')) return;
+  data.lotDefs = data.lotDefs.filter(l=>l.key!==key);
+  delete data.lots[key];
+  delete data.catalog[key];
+  if(activeLot===key) activeLot = data.lotDefs.length ? data.lotDefs[0].key : RECAP_KEY;
+  saveState();
+  renderLotsList();
+  closeModal('lotsModal');
+  renderAll();
+}
+
+/* =========================================================
+   ANALYSE IA
+   ========================================================= */
+async function analyzePlan(lotKey){
+  const data = currentData();
+  const lotData = data.lots[lotKey];
+  if(!lotData.planDataUrl){ alert('Merci de déposer un plan PDF pour ce lot avant de lancer l\'analyse.'); return; }
+  const hauteurInput = document.getElementById('hauteur_'+lotKey);
+  if(hauteurInput) lotData.hauteur = parseFloat(hauteurInput.value) || lotData.hauteur;
+  saveState();
+  setStatus(lotKey,'busy','Analyse du plan en cours par l\'IA... (peut prendre 20-60s)');
+  try{
+    const base64 = lotData.planDataUrl.split(',')[1];
+    const lotDef = currentLots().find(l=>l.key===lotKey);
+    const promptFn = DEFAULT_LOT_PROMPTS[lotKey];
+    const promptText = (promptFn ? promptFn({hauteur: lotData.hauteur}) : genericLotPrompt(lotDef, {hauteur: lotData.hauteur})) + RESPONSE_FORMAT_INSTRUCTIONS;
+    const resp = await apiFetch('/api/analyze-plan', {
+      method:'POST',
+      body: JSON.stringify({ pdfBase64: base64, promptText: promptText, model: state.settings.model })
+    });
+    if(!resp.ok){
+      const errText = await resp.text();
+      throw new Error('HTTP '+resp.status+' - '+errText.slice(0,300));
+    }
+    const json = await resp.json();
+    const textOut = (json.content||[]).map(b=>b.text||'').join('\n');
+    const parsed = extractJson(textOut);
+    if(!parsed || !parsed.items){ throw new Error('Réponse IA non structurée (JSON introuvable). Réessayez, ou changez de modèle dans les paramètres.'); }
+    const catalog = data.catalog[lotKey];
+    parsed.items.forEach(it=>{
+      // tente de rattacher automatiquement a un produit du catalogue si nom proche
+      const match = catalog.find(c=> (it.element||'').toLowerCase().includes(c.nom.toLowerCase()) || c.nom.toLowerCase().includes((it.element||'').toLowerCase()));
+      lotData.items.push({
+        piece: it.piece||'', element: it.element||'', quantite: Number(it.quantite)||0,
+        unite: it.unite || currentLots().find(l=>l.key===lotKey).unit_default,
+        description: it.description||'', produitId: match?match.id:null, pu: match?match.pu:0, source:'ai'
+      });
+    });
+    lotData.notes = parsed.notes || [];
+    saveState();
+    setStatus(lotKey,'ok', parsed.items.length + ' ligne(s) ajoutée(s) par l\'IA. Vérifiez et ajustez les quantités avant chiffrage.');
+    renderRows(lotKey);
+    renderNotes(lotKey);
+    refreshTotalLine(lotKey);
+    refreshCountPill(lotKey);
+  }catch(err){
+    console.error(err);
+    setStatus(lotKey,'err','Erreur : ' + err.message);
+  }
+}
+function extractJson(text){
+  try{ return JSON.parse(text); }catch(e){}
+  const m = text.match(/```json([\\s\\S]*?)```/) || text.match(/```([\\s\\S]*?)```/);
+  if(m){ try{ return JSON.parse(m[1]); }catch(e){} }
+  const first = text.indexOf('{'); const last = text.lastIndexOf('}');
+  if(first!==-1 && last!==-1){ try{ return JSON.parse(text.slice(first,last+1)); }catch(e){} }
+  return null;
+}
+
+/* =========================================================
+   RECAPITULATIF
+   ========================================================= */
+function renderRecap(wrap){
+  const data = currentData();
+  const client = currentClient();
+  let grandTotal = 0;
+  const tiles = currentLots().map(l=>{
+    const t = lotTotal(l.key);
+    grandTotal += t;
+    return `<div class="recap-tile"><div class="rt-label">${l.label}</div><div class="rt-value">${fmt(t)}</div>
+      <div class="rt-sub">${data.lots[l.key].items.length} ligne(s)</div></div>`;
+  }).join('');
+  const card = document.createElement('div');
+  card.className='card';
+  card.innerHTML = `<h2>Récapitulatif — ${escapeHtml(client.nom)}</h2>
+    <div class="recap-grid">
+      ${tiles}
+      <div class="recap-tile" style="border-color:var(--copper);"><div class="rt-label">Total général HT</div>
+        <div class="rt-value" style="color:var(--copper);font-size:24px;">${fmt(grandTotal)}</div></div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn btn-teal" onclick="exportDevisPDF()">⬇ Export Devis (PDF)</button>
+      <button class="btn btn-teal" onclick="exportCctpPDF()">⬇ Export CCTP (PDF)</button>
+      <button class="btn btn-teal" onclick="exportExcel()">⬇ Export Excel (métré complet)</button>
+    </div>`;
+  wrap.appendChild(card);
+}
+
+/* =========================================================
+   EXPORTS
+   ========================================================= */
+function allItemsFlat(){
+  const data = currentData();
+  const rows = [];
+  currentLots().forEach(l=>{
+    data.lots[l.key].items.forEach(it=>{
+      rows.push({lot:l.label, piece:it.piece, element:it.element, quantite:it.quantite, unite:it.unite,
+        description:it.description, pu:it.pu||0, total:(Number(it.quantite)||0)*(Number(it.pu)||0)});
+    });
+  });
+  return rows;
+}
+function exportDevisPDF(){
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  const client = currentClient();
+  doc.setFontSize(16); doc.text('Devis estimatif — ' + client.nom, 14, 18);
+  doc.setFontSize(10); doc.text(client.adresse||'', 14, 25);
+  doc.text('Date : ' + new Date().toLocaleDateString('fr-FR'), 14, 31);
+  const rows = allItemsFlat();
+  doc.autoTable({
+    startY: 38,
+    head: [['Lot','Pièce','Élément','Qté','Unité','PU HT','Total HT']],
+    body: rows.map(r=>[r.lot,r.piece,r.element, (r.quantite||0).toLocaleString('fr-FR'), r.unite, fmt(r.pu), fmt(r.total)]),
+    styles:{fontSize:8}, headStyles:{fillColor:[226,145,77]}
+  });
+  const total = rows.reduce((a,r)=>a+r.total,0);
+  const y = doc.lastAutoTable.finalY + 10;
+  doc.setFontSize(12); doc.text('Total général HT : ' + fmt(total), 14, y);
+  doc.save('Devis_'+client.nom.replace(/\\s+/g,'_')+'.pdf');
+}
+function exportCctpPDF(){
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  const client = currentClient();
+  doc.setFontSize(16); doc.text('CCTP — ' + client.nom, 14, 18);
+  doc.setFontSize(10); doc.text(client.adresse||'', 14, 25);
+  let y = 34;
+  const data = currentData();
+  currentLots().forEach(l=>{
+    const items = data.lots[l.key].items;
+    if(items.length===0) return;
+    if(y>270){ doc.addPage(); y=20; }
+    doc.setFontSize(13); doc.setTextColor(226,145,77); doc.text(l.label.toUpperCase(), 14, y); y+=6;
+    doc.setTextColor(0,0,0);
+    items.forEach(it=>{
+      if(y>275){ doc.addPage(); y=20; }
+      doc.setFontSize(10); doc.setFont(undefined,'bold');
+      doc.text(`${it.piece} — ${it.element} (${it.quantite} ${it.unite})`, 14, y); y+=5;
+      doc.setFont(undefined,'normal'); doc.setFontSize(9);
+      const desc = doc.splitTextToSize(it.description || 'Description à compléter.', 180);
+      doc.text(desc, 14, y); y += desc.length*4.2 + 4;
+    });
+    y += 4;
+  });
+  doc.save('CCTP_'+client.nom.replace(/\\s+/g,'_')+'.pdf');
+}
+function exportExcel(){
+  const client = currentClient();
+  const rows = allItemsFlat();
+  const ws = XLSX.utils.json_to_sheet(rows.map(r=>({
+    Lot:r.lot, Pièce:r.piece, Élément:r.element, Quantité:r.quantite, Unité:r.unite,
+    'PU HT':r.pu, 'Total HT':r.total, 'Description CCTP':r.description
+  })));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Metre complet');
+  XLSX.writeFile(wb, 'Metre_'+client.nom.replace(/\\s+/g,'_')+'.xlsx');
+}
+
+/* =========================================================
+   UTILS
+   ========================================================= */
+function fmt(n){ return (isNaN(n)?0:n).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' €'; }
+function escapeHtml(s){ return (s||'').toString().replace(/[&<>]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+function escapeAttr(s){ return escapeHtml(s).replace(/"/g,'&quot;'); }
+
+/* =========================================================
+   INIT
+   ========================================================= */
+(function init(){
+  if(state.clients.length && !state.currentClientId) state.currentClientId = state.clients[0].id;
+  renderAll();
+  ensureWorkspacePassword();
+})();
+</script>
+</body>
+</html>
