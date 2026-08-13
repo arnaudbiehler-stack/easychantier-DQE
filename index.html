@@ -243,6 +243,22 @@ a{color:var(--copper);}
   </div>
 </div>
 
+<!-- Modal: bibliotheque de clauses CCTP -->
+<div class="modal-bg" id="clauseModal">
+  <div class="modal" style="max-width:600px;">
+    <h3>Bibliothèque CCTP — <span id="clauseModalLotName"></span></h3>
+    <div class="hint" style="margin-bottom:14px;">Ces clauses type sont réutilisables : depuis une ligne de métré, utilisez le menu "+ Insérer une clause"
+      sous la description pour ajouter le texte d'une clause à cette ligne. Chaque clause reste éditable ligne par ligne après insertion.</div>
+    <div id="clauseList" style="margin-bottom:16px;"></div>
+    <div style="border-top:1px solid var(--border);padding-top:14px;">
+      <div class="field"><label>Titre de la clause</label><input id="newClauseTitre" placeholder="ex: Doublage BA13 sur ossature métallique"></div>
+      <div class="field"><label>Texte de la clause (CCTP)</label><textarea id="newClauseTexte" rows="4" placeholder="Description technique complète : matériaux, mise en œuvre, tolérances, conditions de réception, référence DTU/norme applicable..."></textarea></div>
+      <button class="btn btn-primary" style="width:100%;" onclick="addClause()">+ Ajouter cette clause</button>
+    </div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal('clauseModal')">Fermer</button></div>
+  </div>
+</div>
+
 <!-- Modal: gestion des lots -->
 <div class="modal-bg" id="lotsModal">
   <div class="modal" style="max-width:560px;">
@@ -280,6 +296,25 @@ const DEFAULT_LOTS = [
   {key:'peinture',     label:'Peinture',            unit_default:'m²'},
 ];
 const RECAP_KEY = 'recap';
+
+// Normes / DTU les plus courants par lot - non exhaustif, sert de repere pour que l'IA
+// cite la reference applicable dans ses descriptions CCTP plutot que d'en inventer une.
+// (Ce n'est PAS une base CSTB : le CSTB ne fournit pas d'API publique/gratuite pour cela -
+// ses bases documentaires DTU/avis techniques sont un produit commercial sous licence.
+// Cette liste est une aide de bon sens, a completer/corriger vous-meme si besoin via
+// les instructions specifiques d'un lot, ⚙ Lots.)
+const DEFAULT_DTU_REFS = {
+  demolition:   ['réglementation déchets de chantier (tri 7 flux)'],
+  terrassement: ['DTU 12 (terrassements pour le bâtiment)', 'NF P11-300 (classification des sols)'],
+  maconnerie:   ['DTU 20.1 (ouvrages en maçonnerie de petits éléments)', 'DTU 21 (exécution des ouvrages en béton)'],
+  placo:        ['DTU 25.41 (plâtrerie - enduits intérieurs en plâtre)', 'DTU 25.42 (ouvrages en plaques de plâtre sur ossature métallique)'],
+  cvc:          ['DTU 68.3 (installations de VMC)', 'NF EN 12831 (calcul des déperditions)'],
+  plomberie:    ['DTU 60.1 (plomberie sanitaire pour bâtiments)', 'DTU 60.11 (règles de calcul évacuations EU/EV)'],
+  electricite:  ['NF C 15-100 (installations électriques basse tension)'],
+  menuiseries:  ['DTU 36.5 (mise en œuvre des fenêtres et portes extérieures)', 'DTU 34.1 (ouvrages de fermeture)'],
+  carrelage:    ['DTU 52.1 (revêtements de sol scellés)', 'DTU 52.2 (revêtements de sol collés)'],
+  peinture:     ['DTU 59.1 (revêtements par peinture)'],
+};
 
 // Instructions specifiques par lot envoyees a l'IA - capitalisent sur la methode
 // utilisee manuellement (lecture de legende, hypotheses de calcul).
@@ -371,14 +406,22 @@ Réponds UNIQUEMENT avec un bloc JSON (rien avant, rien après), au format stric
 {
   "notes": ["remarque générale 1", "remarque générale 2"],
   "items": [
-    {"piece": "Nom de la pièce", "element": "Nom court de l'élément/symbole", "quantite": 12.5, "unite": "m²", "description": "Description technique courte, style CCTP, incluant la méthode/l'hypothèse de calcul utilisée."}
+    {"piece": "Nom de la pièce", "element": "Nom court de l'élément/symbole", "quantite": 12.5, "unite": "m²", "description": "Description CCTP structurée (voir consignes ci-dessous)."}
   ]
 }
 Règles :
 - "quantite" est un nombre (pas de texte, pas d'unité dedans).
 - Une ligne par (pièce, élément) - ne fusionne pas des éléments différents sur une même ligne.
 - Le champ "notes" contient les points de vigilance globaux (cotes manquantes, éléments illisibles, hypothèses fortes).
-- N'ajoute aucun texte hors de ce JSON.`;
+- N'ajoute aucun texte hors de ce JSON.
+
+Consignes de rédaction pour le champ "description" (style CCTP - Cahier des Clauses Techniques Particulières) :
+Rédige une description complète et structurée, pas une simple phrase courte, en couvrant dans l'ordre autant que pertinent pour cet élément :
+1. Matériaux/produits mis en œuvre (nature, caractéristiques principales).
+2. Mise en œuvre (méthode d'exécution résumée, supports, fixation/pose).
+3. Tolérances et conditions de réception habituelles pour ce type d'ouvrage (aplomb, planéité, étanchéité, essais... selon le lot).
+4. Si tu identifies une norme ou un DTU clairement applicable à cet ouvrage, cite-la explicitement entre parenthèses en fin de description (ex : "(DTU 25.41)"). N'invente jamais un numéro de DTU si tu n'es pas raisonnablement confiant : dans le doute, ne cite aucune référence plutôt que d'en inventer une - une référence fausse est pire qu'une absence de référence.
+Cette description doit rester un point de départ professionnel et modifiable par l'utilisateur, pas une clause juridiquement engageante définitive.`;
 
 // Catalogue de depart (quelques exemples par lot, l'utilisateur peut en ajouter/modifier)
 const DEFAULT_CATALOG = {
@@ -426,6 +469,33 @@ const DEFAULT_CATALOG = {
   ],
 };
 
+// Bibliotheque de clauses CCTP type de depart (quelques exemples par lot,
+// l'utilisateur peut en ajouter/modifier/supprimer via le bouton "📚 Clauses CCTP").
+const DEFAULT_CLAUSES = {
+  placo: [
+    {titre:'Doublage BA13 sur ossature métallique', texte:"Fourniture et pose d'un doublage en plaque de plâtre BA13 sur ossature métallique fixée en périphérie, montants entraxe 60cm maximum, isolation intercalaire si prévue au marché, traitement des joints en 3 passes (bande, enduit, finition), ponçage fini prêt à peindre. Tolérances : planéité générale ≤ 5mm sous la règle de 2m, aplomb ≤ 2mm/m. Réception après séchage complet des enduits (DTU 25.41 / DTU 25.42)."},
+    {titre:'Cloison de distribution BA13 double face', texte:"Fourniture et pose d'une cloison de distribution composée d'une ossature métallique simple entraxe 60cm, garnie d'un isolant (laine minérale) et parementée de plaques BA13 sur les deux faces, joints traités en 3 passes. Tolérances : planéité ≤ 5mm sous règle de 2m, aplomb ≤ 2mm/m. Réception visuelle après finition (DTU 25.41 / DTU 25.42)."},
+  ],
+  cvc: [
+    {titre:'Réseau gainable + bouches', texte:"Fourniture et pose d'un réseau de gaines isolées pour diffusion d'air, raccordement aux bouches de soufflage/reprise selon plan, équilibrage des débits par pièce selon note de calcul. Essais d'étanchéité et de débit à la mise en service. Réception avec procès-verbal d'équilibrage (DTU 68.3)."},
+  ],
+  plomberie: [
+    {titre:'Alimentation eau chaude/froide', texte:"Création d'un point d'alimentation en eau chaude et eau froide en tube multicouche ou cuivre selon les règles de l'art, raccordement au réseau existant/projeté, pose de robinets d'arrêt individuels. Essai de pression avant fermeture des supports. Réception après contrôle d'absence de fuite (DTU 60.1)."},
+  ],
+  electricite: [
+    {titre:'Circuit prise de courant 16A', texte:"Tirage d'une ligne dédiée depuis le tableau de répartition, câble de section adaptée, pose d'une prise de courant 2P+T 16A en encastré, raccordement et mise à la terre. Contrôle de continuité et d'isolement avant mise sous tension (NF C 15-100)."},
+  ],
+  menuiseries: [
+    {titre:'Fenêtre PVC double vitrage', texte:"Fourniture et pose en applique ou tunnel (selon configuration existante) d'une fenêtre PVC double vitrage 4/16/4 à isolation renforcée, calfeutrement périphérique, pose d'un joint compribande ou mousse expansive, habillages intérieur/extérieur compris. Tolérances de pose : jeu périphérique régulier, aplomb ≤ 2mm/m. Réception avec contrôle d'étanchéité à l'air (DTU 36.5)."},
+  ],
+  carrelage: [
+    {titre:'Carrelage grès cérame collé', texte:"Fourniture et pose d'un carrelage en grès cérame collé sur chape ou support préparé, double encollage si format > 30x30, joints selon plan de calepinage, plinthes assorties en finition. Tolérances : planéité ≤ 3mm sous règle de 2m, désaffleurement entre carreaux ≤ 1mm. Réception visuelle et sonore (recherche de zones creuses) (DTU 52.2)."},
+  ],
+  peinture: [
+    {titre:'Peinture murs - 2 couches', texte:"Préparation des supports (rebouchage, ponçage, dépoussiérage), application d'une sous-couche d'impression si nécessaire, puis application de 2 couches de peinture acrylique mate en finition, teinte au choix du client. Réception à la lumière rasante, absence de reprises ou de manque de matière visibles (DTU 59.1)."},
+  ],
+};
+
 /* =========================================================
    ETAT / PERSISTANCE
    ========================================================= */
@@ -437,8 +507,12 @@ function defaultLotData(){
   return {hauteur: 3.0, planName:'', planDataUrl:'', items:[], notes:[]};
 }
 function newClientData(){
-  const d = {lotDefs: DEFAULT_LOTS.map(l=>({...l})), lots:{}, catalog:{}};
-  d.lotDefs.forEach(l => { d.lots[l.key] = defaultLotData(); d.catalog[l.key] = (DEFAULT_CATALOG[l.key]||[]).map((p,i)=>({id:l.key+'_'+i, ...p})); });
+  const d = {lotDefs: DEFAULT_LOTS.map(l=>({...l})), lots:{}, catalog:{}, clauses:{}};
+  d.lotDefs.forEach(l => {
+    d.lots[l.key] = defaultLotData();
+    d.catalog[l.key] = (DEFAULT_CATALOG[l.key]||[]).map((p,i)=>({id:l.key+'_'+i, ...p}));
+    d.clauses[l.key] = (DEFAULT_CLAUSES[l.key]||[]).map((c,i)=>({id:l.key+'_cl_'+i, ...c}));
+  });
   return d;
 }
 function loadState(){
@@ -592,6 +666,9 @@ function currentData(){
   const d = state.data[state.currentClientId];
   // migration : anciens clients crees avant l'introduction des lots personnalisables
   if(!d.lotDefs) d.lotDefs = DEFAULT_LOTS.map(l=>({...l})).filter(l=>d.lots && d.lots[l.key]);
+  // migration : anciens clients crees avant l'introduction de la bibliotheque de clauses CCTP
+  if(!d.clauses) d.clauses = {};
+  d.lotDefs.forEach(l=>{ if(!d.clauses[l.key]) d.clauses[l.key] = (DEFAULT_CLAUSES[l.key]||[]).map((c,i)=>({id:l.key+'_cl_'+i, ...c})); });
   return d;
 }
 // Renvoie la liste des lots du client actuellement selectionne (liste vide si aucun client).
@@ -836,6 +913,17 @@ function renderLotPanel(wrap, lotKey){
   wrap.appendChild(card3);
   renderCatalog(lotKey);
 
+  // Carte bibliotheque de clauses CCTP
+  const clauses = data.clauses[lotKey] || [];
+  const card4 = document.createElement('div');
+  card4.className = 'card';
+  card4.innerHTML = `<h2>📚 Bibliothèque CCTP — ${lot.label} <span class="count-pill">${clauses.length} clause(s)</span></h2>
+    <div class="hint" style="margin-bottom:12px;">Clauses techniques types, réutilisables ligne par ligne (bouton "+ Insérer une clause" sous chaque description dans le tableau ci-dessus).</div>
+    <div class="catalog-grid" id="clauses_${lotKey}"></div>
+    <div style="margin-top:12px;"><button class="btn btn-sm" onclick="openClauseModal('${lotKey}')">+ Gérer les clauses de ce lot</button></div>`;
+  wrap.appendChild(card4);
+  renderClausesGrid(lotKey);
+
   // Wire dropzone
   const dz = document.getElementById('dz_'+lotKey);
   const fileInput = document.getElementById('file_'+lotKey);
@@ -902,13 +990,18 @@ function renderRows(lotKey){
     const catOptions = ['<option value="">— aucun —</option>'].concat(
       catalog.map(c=>`<option value="${c.id}" ${it.produitId===c.id?'selected':''}>${escapeHtml(c.nom)}</option>`)
     ).join('');
+    const clauses = data.clauses[lotKey] || [];
+    const clauseOptions = ['<option value="">+ Insérer une clause…</option>'].concat(
+      clauses.map(c=>`<option value="${c.id}">${escapeHtml(c.titre)}</option>`)
+    ).join('');
     tr.innerHTML = `
       <td><input value="${escapeAttr(it.piece)}" onchange="updateItem('${lotKey}',${idx},'piece',this.value)"></td>
       <td><input value="${escapeAttr(it.element)}" onchange="updateItem('${lotKey}',${idx},'element',this.value)">
           ${it.source==='ai' ? '<span class="badge ai">IA</span>' : '<span class="badge manual">manuel</span>'}</td>
       <td class="num"><input type="number" step="0.01" value="${it.quantite}" onchange="updateItem('${lotKey}',${idx},'quantite',this.value)"></td>
       <td><input value="${escapeAttr(it.unite)}" onchange="updateItem('${lotKey}',${idx},'unite',this.value)"></td>
-      <td><textarea onchange="updateItem('${lotKey}',${idx},'description',this.value)">${escapeHtml(it.description||'')}</textarea></td>
+      <td><textarea onchange="updateItem('${lotKey}',${idx},'description',this.value)">${escapeHtml(it.description||'')}</textarea>
+          <select style="margin-top:4px;font-size:11px;" onchange="insertClause('${lotKey}',${idx},this.value); this.selectedIndex=0;">${clauseOptions}</select></td>
       <td><select onchange="linkProduct('${lotKey}',${idx},this.value)">${catOptions}</select></td>
       <td class="num"><input type="number" step="0.01" value="${it.pu||0}" onchange="updateItem('${lotKey}',${idx},'pu',this.value)"></td>
       <td class="num">${fmt(total)}</td>
@@ -943,6 +1036,20 @@ function linkProduct(lotKey, idx, produitId){
     if(!items[idx].description) items[idx].description = cat.description;
     if(!items[idx].unite) items[idx].unite = cat.unite;
   }
+  saveState();
+  renderRows(lotKey);
+  refreshTotalLine(lotKey);
+}
+// Insere le texte d'une clause de la bibliotheque dans la description d'une ligne
+// (ajoute a la suite du texte existant plutot que de l'ecraser, pour ne rien perdre).
+function insertClause(lotKey, idx, clauseId){
+  if(!clauseId) return;
+  const data = currentData();
+  const items = data.lots[lotKey].items;
+  const clause = (data.clauses[lotKey]||[]).find(c=>c.id===clauseId);
+  if(!clause) return;
+  const cur = (items[idx].description||'').trim();
+  items[idx].description = cur ? (cur + '\n\n' + clause.texte) : clause.texte;
   saveState();
   renderRows(lotKey);
   refreshTotalLine(lotKey);
@@ -1021,6 +1128,65 @@ function deleteCatalogItem(lotKey, id){
   renderCatalog(lotKey);
 }
 
+/* ---------- bibliotheque de clauses CCTP ---------- */
+// Petit apercu (cartes) affiche directement dans le panel du lot.
+function renderClausesGrid(lotKey){
+  const el = document.getElementById('clauses_'+lotKey);
+  const clauses = currentData().clauses[lotKey] || [];
+  if(!el) return;
+  if(clauses.length===0){ el.innerHTML = '<div class="empty">Aucune clause pour l\'instant. Cliquez sur "+ Gérer les clauses de ce lot".</div>'; return; }
+  el.innerHTML = clauses.map(c=>`
+    <div class="cat-card">
+      <div class="cn">${escapeHtml(c.titre)}</div>
+      <div class="cd">${escapeHtml((c.texte||'').slice(0,140))}${(c.texte||'').length>140?'…':''}</div>
+    </div>`).join('');
+}
+let clauseModalLot = null;
+function openClauseModal(lotKey){
+  clauseModalLot = lotKey;
+  const lot = currentLots().find(l=>l.key===lotKey);
+  document.getElementById('clauseModalLotName').textContent = lot ? lot.label : '';
+  document.getElementById('newClauseTitre').value='';
+  document.getElementById('newClauseTexte').value='';
+  renderClauseList();
+  document.getElementById('clauseModal').classList.add('show');
+}
+function renderClauseList(){
+  const el = document.getElementById('clauseList');
+  const clauses = currentData().clauses[clauseModalLot] || [];
+  if(clauses.length===0){ el.innerHTML = '<div class="empty">Bibliothèque vide pour ce lot. Ajoutez une clause ci-dessous.</div>'; return; }
+  el.innerHTML = clauses.map(c=>`
+    <div style="padding:10px 0;border-bottom:1px solid var(--surface-3);">
+      <div style="display:flex;justify-content:space-between;align-items:start;gap:8px;">
+        <div style="font-weight:600;font-size:13px;">${escapeHtml(c.titre)}</div>
+        <button class="btn btn-sm btn-danger" onclick="deleteClause('${c.id}')">Supprimer</button>
+      </div>
+      <div style="font-size:11.5px;color:var(--text-faint);margin-top:4px;line-height:1.4;">${escapeHtml(c.texte)}</div>
+    </div>`).join('');
+}
+function addClause(){
+  const titre = document.getElementById('newClauseTitre').value.trim();
+  const texte = document.getElementById('newClauseTexte').value.trim();
+  if(!titre || !texte){ alert('Merci de renseigner un titre et un texte pour la clause.'); return; }
+  const data = currentData();
+  if(!data.clauses[clauseModalLot]) data.clauses[clauseModalLot] = [];
+  data.clauses[clauseModalLot].push({id: clauseModalLot+'_cl_'+Date.now(), titre, texte});
+  saveState();
+  document.getElementById('newClauseTitre').value='';
+  document.getElementById('newClauseTexte').value='';
+  renderClauseList();
+  renderClausesGrid(clauseModalLot);
+  renderRows(clauseModalLot); // rafraichit les selecteurs "+ Inserer une clause" du tableau
+}
+function deleteClause(id){
+  const data = currentData();
+  data.clauses[clauseModalLot] = (data.clauses[clauseModalLot]||[]).filter(c=>c.id!==id);
+  saveState();
+  renderClauseList();
+  renderClausesGrid(clauseModalLot);
+  renderRows(clauseModalLot);
+}
+
 /* =========================================================
    GESTION DES LOTS (ajout / suppression, propre a chaque client)
    ========================================================= */
@@ -1061,6 +1227,7 @@ function addLot(){
   data.lotDefs.push({key, label:nom, unit_default:unite, custom:true, promptExtra});
   data.lots[key] = defaultLotData();
   data.catalog[key] = [];
+  data.clauses[key] = [];
   saveState();
   activeLot = key;
   document.getElementById('newLotNom').value='';
@@ -1077,6 +1244,7 @@ function deleteLot(key){
   data.lotDefs = data.lotDefs.filter(l=>l.key!==key);
   delete data.lots[key];
   delete data.catalog[key];
+  delete data.clauses[key];
   if(activeLot===key) activeLot = data.lotDefs.length ? data.lotDefs[0].key : RECAP_KEY;
   saveState();
   renderLotsList();
@@ -1099,7 +1267,11 @@ async function analyzePlan(lotKey){
     const base64 = lotData.planDataUrl.split(',')[1];
     const lotDef = currentLots().find(l=>l.key===lotKey);
     const promptFn = DEFAULT_LOT_PROMPTS[lotKey];
-    const promptText = (promptFn ? promptFn({hauteur: lotData.hauteur}) : genericLotPrompt(lotDef, {hauteur: lotData.hauteur})) + RESPONSE_FORMAT_INSTRUCTIONS;
+    const dtuRefs = DEFAULT_DTU_REFS[lotKey] || [];
+    const dtuBlock = dtuRefs.length
+      ? `\n\nRéférences normatives usuelles pour ce lot (à titre indicatif, cite-les dans les descriptions UNIQUEMENT si elles s'appliquent réellement à l'élément décrit — ne les recopie pas systématiquement sur toutes les lignes) : ${dtuRefs.join(' ; ')}.`
+      : '';
+    const promptText = (promptFn ? promptFn({hauteur: lotData.hauteur}) : genericLotPrompt(lotDef, {hauteur: lotData.hauteur})) + dtuBlock + RESPONSE_FORMAT_INSTRUCTIONS;
     const resp = await apiFetch('/api/analyze-plan', {
       method:'POST',
       body: JSON.stringify({ pdfBase64: base64, promptText: promptText, model: state.settings.model })
