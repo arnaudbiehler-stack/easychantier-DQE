@@ -1290,7 +1290,15 @@ async function analyzePlan(lotKey){
     const json = await resp.json();
     const textOut = (json.content||[]).map(b=>b.text||'').join('\n');
     const parsed = extractJson(textOut);
-    if(!parsed || !parsed.items){ throw new Error('Réponse IA non structurée (JSON introuvable). Réessayez, ou changez de modèle dans les paramètres.'); }
+    if(!parsed || !parsed.items){
+      // Message plus precis selon la cause probable, pour eviter le "reessayez" generique
+      // qui n'aide pas quand le vrai probleme est un plan trop dense pour une seule reponse.
+      if(json.stop_reason === 'max_tokens'){
+        throw new Error("Le plan est trop dense pour être analysé en une seule fois (la réponse de l'IA a été coupée avant la fin). Essayez de scinder ce plan en plusieurs PDF plus petits (par étage ou par zone) et analysez-les un par un.");
+      }
+      const apercu = (textOut||'').trim().slice(0,180).replace(/\s+/g,' ');
+      throw new Error('Réponse IA non structurée (JSON introuvable). Début de la réponse de l\'IA : "' + (apercu || '(réponse vide)') + '" — réessayez, ou changez de modèle dans les paramètres.');
+    }
     const catalog = data.catalog[lotKey];
     parsed.items.forEach(it=>{
       // tente de rattacher automatiquement a un produit du catalogue si nom proche
@@ -1315,7 +1323,9 @@ async function analyzePlan(lotKey){
 }
 function extractJson(text){
   try{ return JSON.parse(text); }catch(e){}
-  const m = text.match(/```json([\\s\\S]*?)```/) || text.match(/```([\\s\\S]*?)```/);
+  // Bug corrige : dans un litteral regex /.../, "\\s" est en fait un backslash litteral suivi
+  // de "s" (pas un raccourci "espace"). Il fallait "\s"/"\S" directement, sans double echappement.
+  const m = text.match(/```json([\s\S]*?)```/) || text.match(/```([\s\S]*?)```/);
   if(m){ try{ return JSON.parse(m[1]); }catch(e){} }
   const first = text.indexOf('{'); const last = text.lastIndexOf('}');
   if(first!==-1 && last!==-1){ try{ return JSON.parse(text.slice(first,last+1)); }catch(e){} }
@@ -1384,7 +1394,7 @@ function exportDevisPDF(){
   const total = rows.reduce((a,r)=>a+r.total,0);
   const y = doc.lastAutoTable.finalY + 10;
   doc.setFontSize(12); doc.text('Total général HT : ' + fmt(total), 14, y);
-  doc.save('Devis_'+client.nom.replace(/\\s+/g,'_')+'.pdf');
+  doc.save('Devis_'+client.nom.replace(/\s+/g,'_')+'.pdf');
 }
 function exportCctpPDF(){
   const { jsPDF } = window.jspdf;
@@ -1412,7 +1422,7 @@ function exportCctpPDF(){
     });
     y += 4;
   });
-  doc.save('CCTP_'+client.nom.replace(/\\s+/g,'_')+'.pdf');
+  doc.save('CCTP_'+client.nom.replace(/\s+/g,'_')+'.pdf');
 }
 function exportExcel(){
   const client = currentClient();
@@ -1423,7 +1433,7 @@ function exportExcel(){
   })));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Metre complet');
-  XLSX.writeFile(wb, 'Metre_'+client.nom.replace(/\\s+/g,'_')+'.xlsx');
+  XLSX.writeFile(wb, 'Metre_'+client.nom.replace(/\s+/g,'_')+'.xlsx');
 }
 
 /* =========================================================
