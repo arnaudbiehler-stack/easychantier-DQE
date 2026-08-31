@@ -134,6 +134,15 @@
   .col-num{width:52px;}
   .col-del{width:36px;text-align:center;}
   .col-order{width:44px;text-align:center;}
+  .col-lib{width:36px;text-align:center;}
+  .lib-pick-btn{font-size:15px;padding:4px;background:none;border:none;color:var(--navy);border-radius:6px;}
+  .lib-pick-btn:hover{background:#e4f4da;}
+  .artisan-picker-list{max-height:320px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;margin-bottom:14px;}
+  .artisan-pick-row{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--line);cursor:pointer;gap:10px;}
+  .artisan-pick-row:last-child{border-bottom:none;}
+  .artisan-pick-row:hover{background:#f4f3ee;}
+  .artisan-pick-row .ap-name{font-weight:600;font-size:13px;}
+  .artisan-pick-row .ap-sub{font-size:11.5px;color:var(--ink-soft);}
   .order-btns{display:flex;flex-direction:column;gap:1px;}
   .order-btn{font-size:10px;padding:2px;line-height:1;}
   .order-btn:disabled{opacity:.25;cursor:not-allowed;}
@@ -266,6 +275,7 @@
     </div>
     <div class="tabs">
       <button class="tab-btn" data-tab="projets">Mes projets</button>
+      <button class="tab-btn" data-tab="artisans">Bibliothèque artisans</button>
       <button class="tab-btn" data-tab="projet">Réglages projet</button>
       <button class="tab-btn" data-tab="reunions">Réunions</button>
     </div>
@@ -285,8 +295,8 @@
     <div class="card">
       <h2>Sauvegarde &amp; transfert</h2>
       <p style="font-size:12.5px;color:var(--ink-soft);margin:0 0 12px;">
-        Ces données sont enregistrées dans ce navigateur, sur cet ordinateur. Exportez régulièrement une sauvegarde,
-        et utilisez « Importer » pour la récupérer sur un autre appareil ou après avoir vidé votre navigateur.
+        Ces données sont partagées entre tous les membres de l'équipe connectés avec le mot de passe d'espace de travail.
+        Exportez régulièrement une sauvegarde pour garder une copie de secours en local.
       </p>
       <div class="btn-row">
         <button class="btn btn-ghost" id="exportBtn">⬇ Exporter toutes les données (.json)</button>
@@ -294,6 +304,35 @@
           ⬆ Importer une sauvegarde
           <input type="file" id="importInput" accept="application/json" style="display:none;">
         </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== VIEW: BIBLIOTHÈQUE ARTISANS ===================== -->
+  <div class="view" id="view-artisans">
+    <div class="card" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+      <div>
+        <h2 style="margin-bottom:4px;">Bibliothèque d'artisans</h2>
+        <p style="margin:0;font-size:12.5px;color:var(--ink-soft);">Partagée entre tous les projets et avec toute l'équipe. Renseignez-la une fois, puis piochez dedans lot par lot.</p>
+      </div>
+      <button class="btn btn-green" id="addArtisanBtn">+ Ajouter un artisan</button>
+    </div>
+    <div class="card">
+      <table class="lots-edit" id="libraryTable">
+        <thead>
+          <tr>
+            <th>Entreprise</th>
+            <th>Représentée par</th>
+            <th>Email</th>
+            <th>Téléphone</th>
+            <th class="col-del"></th>
+          </tr>
+        </thead>
+        <tbody id="libraryTbody"></tbody>
+      </table>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="saveLibraryBtn">Enregistrer la bibliothèque</button>
+        <span id="librarySavedHint" style="font-size:12.5px;color:var(--ink-soft);"></span>
       </div>
     </div>
   </div>
@@ -346,6 +385,7 @@
           <tr>
             <th class="col-order"></th>
             <th class="col-num">N°</th>
+            <th class="col-lib"></th>
             <th>Lot</th>
             <th>Entreprise</th>
             <th>Représentée par</th>
@@ -461,6 +501,17 @@
     <input type="password" id="pwInput" placeholder="Mot de passe">
     <div class="pw-error" id="pwError"></div>
     <button class="btn btn-primary" id="pwSubmit" style="width:100%;justify-content:center;">Se connecter</button>
+  </div>
+</div>
+
+<div class="modal-bg" id="artisanPickerModal">
+  <div class="modal" style="max-width:480px;">
+    <h3>Choisir un artisan dans la bibliothèque</h3>
+    <div class="field"><input type="text" id="pickerSearch" placeholder="Rechercher (entreprise, nom, lot...)"></div>
+    <div class="artisan-picker-list" id="pickerList"></div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" id="pickerCancel">Fermer</button>
+    </div>
   </div>
 </div>
 
@@ -595,6 +646,7 @@
       if(ACTIVE_ID) await apiSet('active_project', ACTIVE_ID);
     }
     await loadActiveProject();
+    await loadLibrary();
     await renderProjectsList();
     updateTopbar();
     if(ACTIVE_ID){ renderProjectForm(); await renderMeetingsList(); showView('reunions'); }
@@ -646,14 +698,18 @@
     document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
     document.getElementById('view-'+name).classList.add('active');
     document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
-    const map = {projets:'projets', projet:'projet', reunions:'reunions', editor:'reunions', preview:'reunions'};
+    const map = {projets:'projets', artisans:'artisans', projet:'projet', reunions:'reunions', editor:'reunions', preview:'reunions'};
     document.querySelector('.tab-btn[data-tab="'+map[name]+'"]')?.classList.add('active');
     if(name==='reunions') document.getElementById('reunionsSubtitle').textContent = PROJECT ? ("Projet : " + (PROJECT.title||'(sans titre)')) : "";
   }
 
   function bindGlobalEvents(){
     document.querySelectorAll('.tab-btn').forEach(btn=>{
-      btn.addEventListener('click', ()=>{ if(btn.disabled) return; showView(btn.dataset.tab); });
+      btn.addEventListener('click', async ()=>{
+        if(btn.disabled) return;
+        if(btn.dataset.tab === 'artisans'){ await loadLibrary(); renderLibraryForm(); showView('artisans'); return; }
+        showView(btn.dataset.tab);
+      });
     });
     document.getElementById('topProjBtn').addEventListener('click', ()=> showView('projets'));
 
@@ -664,6 +720,14 @@
 
     document.getElementById('exportBtn').addEventListener('click', exportAllData);
     document.getElementById('importInput').addEventListener('change', importAllData);
+
+    document.getElementById('addArtisanBtn').addEventListener('click', ()=>{
+      LIBRARY.push({id: uid('art_'), entreprise:"", contact:"", email:"", tel:""});
+      renderLibraryForm();
+    });
+    document.getElementById('saveLibraryBtn').addEventListener('click', saveLibrary);
+    document.getElementById('pickerCancel').addEventListener('click', closeArtisanPicker);
+    document.getElementById('pickerSearch').addEventListener('input', ()=> renderPickerList());
 
     document.getElementById('addLotBtn').addEventListener('click', ()=>{
       PROJECT.lots.push({id: uid('lot_'), num:String(PROJECT.lots.length+1).padStart(2,'0'), lot:"", entreprise:"", contact:"", email:"", tel:""});
@@ -681,6 +745,90 @@
     });
     document.getElementById('addSchemaBtn').addEventListener('click', ()=>{ CURRENT_MEETING.schemas.push({desc:"", ref:""}); renderSchemasList(); });
     document.getElementById('addPhotoBtn').addEventListener('click', ()=>{ CURRENT_MEETING.photos.push({url:"", caption:""}); renderPhotosList(); });
+  }
+
+  // ================= ARTISANS LIBRARY =================
+  let LIBRARY = [];
+  let PICKER_LOT_ID = null;
+
+  async function loadLibrary(){ LIBRARY = (await apiGet('artisans_library')) || []; }
+  async function saveLibrary(){
+    const ok = await apiSet('artisans_library', LIBRARY);
+    const hint = document.getElementById('librarySavedHint');
+    hint.textContent = ok ? "Enregistré ✓" : "Erreur d'enregistrement";
+    setTimeout(()=>hint.textContent="", 2500);
+    toast(ok ? "Bibliothèque enregistrée" : "Erreur lors de l'enregistrement", !ok);
+  }
+
+  function renderLibraryForm(){
+    const tbody = document.getElementById('libraryTbody');
+    tbody.innerHTML = "";
+    if(!LIBRARY.length){
+      tbody.innerHTML = `<tr><td colspan="5" style="padding:20px;text-align:center;color:var(--ink-soft);">Aucun artisan enregistré pour l'instant. Cliquez sur « + Ajouter un artisan ».</td></tr>`;
+      return;
+    }
+    LIBRARY.forEach(a=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><input type="text" data-field="entreprise" value="${escAttr(a.entreprise)}" placeholder="Entreprise"></td>
+        <td><input type="text" data-field="contact" value="${escAttr(a.contact)}" placeholder="Nom du contact"></td>
+        <td><input type="email" data-field="email" value="${escAttr(a.email)}" placeholder="email@..."></td>
+        <td><input type="tel" data-field="tel" value="${escAttr(a.tel)}" placeholder="06 00 00 00 00"></td>
+        <td class="col-del"><button class="icon-btn" title="Supprimer">✕</button></td>
+      `;
+      tr.querySelectorAll('input').forEach(inp=>{
+        inp.addEventListener('input', ()=>{ a[inp.dataset.field] = inp.value; });
+      });
+      tr.querySelector('.icon-btn').addEventListener('click', ()=>{
+        LIBRARY = LIBRARY.filter(x=>x.id !== a.id);
+        renderLibraryForm();
+      });
+      tbody.appendChild(tr);
+    });
+  }
+
+  async function openArtisanPicker(lotId){
+    PICKER_LOT_ID = lotId;
+    if(!LIBRARY.length){ await loadLibrary(); }
+    document.getElementById('pickerSearch').value = "";
+    renderPickerList();
+    document.getElementById('artisanPickerModal').classList.add('show');
+  }
+  function closeArtisanPicker(){ document.getElementById('artisanPickerModal').classList.remove('show'); PICKER_LOT_ID = null; }
+
+  function renderPickerList(){
+    const q = document.getElementById('pickerSearch').value.trim().toLowerCase();
+    const wrap = document.getElementById('pickerList');
+    const filtered = LIBRARY.filter(a=>{
+      if(!q) return true;
+      return (a.entreprise||'').toLowerCase().includes(q) || (a.contact||'').toLowerCase().includes(q);
+    });
+    if(!filtered.length){
+      wrap.innerHTML = `<div style="padding:20px;text-align:center;color:var(--ink-soft);font-size:12.5px;">${LIBRARY.length ? 'Aucun résultat.' : "Bibliothèque vide — ajoutez des artisans dans l'onglet « Bibliothèque artisans »."}</div>`;
+      return;
+    }
+    wrap.innerHTML = "";
+    filtered.forEach(a=>{
+      const row = document.createElement('div');
+      row.className = 'artisan-pick-row';
+      row.innerHTML = `
+        <div>
+          <div class="ap-name">${escHtml(a.entreprise || '(sans nom)')}</div>
+          <div class="ap-sub">${escHtml(a.contact||'')}${a.tel ? ' · '+escHtml(a.tel) : ''}${a.email ? ' · '+escHtml(a.email) : ''}</div>
+        </div>
+        <span class="btn btn-ghost btn-sm">Choisir</span>
+      `;
+      row.addEventListener('click', ()=>{
+        const lot = PROJECT.lots.find(l=>l.id === PICKER_LOT_ID);
+        if(lot){
+          lot.entreprise = a.entreprise; lot.contact = a.contact; lot.email = a.email; lot.tel = a.tel;
+          renderProjectForm();
+          toast("Artisan appliqué au lot");
+        }
+        closeArtisanPicker();
+      });
+      wrap.appendChild(row);
+    });
   }
 
   // ================= PROJECTS MANAGEMENT =================
@@ -780,7 +928,7 @@
   // ================= EXPORT / IMPORT =================
   async function exportAllData(){
     const idx = await getProjectsIndex();
-    const data = { exportedAt: new Date().toISOString(), projects: {}, meetings: {}, projectsIndex: idx };
+    const data = { exportedAt: new Date().toISOString(), projects: {}, meetings: {}, projectsIndex: idx, artisansLibrary: (await apiGet('artisans_library')) || [] };
     for(const p of idx){
       data.projects[p.id] = await apiGet('project_'+p.id);
       const mids = (await apiGet('meetings_'+p.id)) || [];
@@ -804,7 +952,7 @@
       try{
         const data = JSON.parse(reader.result);
         if(!data.projectsIndex) throw new Error("format invalide");
-        if(!confirm("Importer cette sauvegarde va fusionner ses projets avec ceux déjà présents (les projets de même identifiant seront remplacés). Continuer ?")) return;
+        if(!confirm("Importer cette sauvegarde va fusionner ses projets (et sa bibliothèque d'artisans) avec ceux déjà présents. Continuer ?")) return;
         let list = await getProjectsIndex();
         for(const p of data.projectsIndex){
           await apiSet('project_'+p.id, data.projects[p.id]);
@@ -815,6 +963,13 @@
           else list = list.map(x=> x.id===p.id ? {id:p.id, title:p.title} : x);
         }
         await setProjectsIndex(list);
+        if(Array.isArray(data.artisansLibrary) && data.artisansLibrary.length){
+          const existing = (await apiGet('artisans_library')) || [];
+          const existingIds = new Set(existing.map(a=>a.id));
+          const merged = existing.concat(data.artisansLibrary.filter(a=>!existingIds.has(a.id)));
+          await apiSet('artisans_library', merged);
+          LIBRARY = merged;
+        }
         await renderProjectsList();
         toast("Sauvegarde importée (" + data.projectsIndex.length + " projet(s))");
         if(!ACTIVE_ID && list.length){ await switchProject(list[0].id); }
@@ -849,6 +1004,7 @@
           </div>
         </td>
         <td><input type="text" data-field="num" value="${escAttr(lot.num)}" style="width:100%"></td>
+        <td class="col-lib"><button class="lib-pick-btn" title="Choisir dans la bibliothèque">📋</button></td>
         <td><input type="text" data-field="lot" value="${escAttr(lot.lot)}" placeholder="Nom du lot"></td>
         <td><input type="text" data-field="entreprise" value="${escAttr(lot.entreprise)}" placeholder="Entreprise"></td>
         <td><input type="text" data-field="contact" value="${escAttr(lot.contact)}" placeholder="Nom du contact"></td>
@@ -856,6 +1012,7 @@
         <td><input type="tel" data-field="tel" value="${escAttr(lot.tel)}" placeholder="06 00 00 00 00"></td>
         <td class="col-del"><button class="icon-btn" title="Supprimer">✕</button></td>
       `;
+      tr.querySelector('.lib-pick-btn').addEventListener('click', ()=> openArtisanPicker(lot.id));
       tr.querySelectorAll('input').forEach(inp=>{
         inp.addEventListener('input', ()=>{ lot[inp.dataset.field] = inp.value; });
       });
