@@ -251,6 +251,8 @@
   .item-status.done{color:#3a7d1a;background:#e4f4da;border-color:#bfe3a8;}
   .item-row .icon-btn{margin-top:3px;}
   .lotinfo td.pv-cell{white-space:normal;}
+  .pv-block{margin:4px 0 8px;font-size:13px;}
+  .pv-block p{margin:4px 0;}
   .pv-item{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;padding:5px 0;border-bottom:1px dashed var(--line);}
   .pv-item:first-child{padding-top:0;}
   .pv-item:last-child{border-bottom:none;padding-bottom:0;}
@@ -478,11 +480,22 @@
 
     <div class="card">
       <h2><span class="num">4</span>Remarques générales tous corps d'état</h2>
-      <div class="field"><textarea id="m-remarques" placeholder="Ex. Rappel du port des EPI, soin apporté aux éléments conservés..."></textarea></div>
+      <div class="field">
+        <div class="items-list" id="remarquesList"></div>
+        <button type="button" class="btn btn-ghost btn-sm" id="addRemarqueBtn">+ Ajouter une ligne</button>
+      </div>
     </div>
 
     <div class="card">
-      <h2><span class="num">5</span>Pièces complémentaires</h2>
+      <h2><span class="num">5</span>Remarques générales Maître d'Ouvrage</h2>
+      <div class="field">
+        <div class="items-list" id="remarquesMOList"></div>
+        <button type="button" class="btn btn-ghost btn-sm" id="addRemarqueMOBtn">+ Ajouter une ligne</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2><span class="num">6</span>Pièces complémentaires</h2>
       <div class="field">
         <label>Notes complémentaires</label>
         <textarea id="m-pieces" placeholder="Ex. Tout matériel laissé sur site est à la charge de l'entreprise concernée."></textarea>
@@ -495,7 +508,7 @@
     </div>
 
     <div class="card">
-      <h2><span class="num">6</span>Annexes — photos d'avancement</h2>
+      <h2><span class="num">7</span>Annexes — photos d'avancement</h2>
       <div class="field">
         <label>Lien image (URL) + légende</label>
         <div id="photosList"></div>
@@ -1181,7 +1194,8 @@ Dans le BTP en moyenne il y a 50 accidents de travail / jour !`;
       nextDate:"", nextHeure:"15:00", moPresent:false,
       generalites: DEFAULT_GENERALITES, generalitesExtra:"",
       lotStatus:{}, lotText:{},
-      remarques: prevMeeting ? (prevMeeting.remarques || "") : "",
+      remarques: prevMeeting ? normItems(prevMeeting.remarques).filter(x=>x.t.trim()) : [],
+      remarquesMO: prevMeeting ? normItems(prevMeeting.remarquesMO).filter(x=>x.t.trim()) : [],
       pieces:"", schemas:[], photos:[]
     };
     PROJECT.lots.forEach(l=>{
@@ -1206,6 +1220,7 @@ Dans le BTP en moyenne il y a 50 accidents de travail / jour !`;
     if(!m){ toast("Compte rendu introuvable", true); return; }
     m.lotStatus = m.lotStatus || {}; m.lotText = m.lotText || {};
     m.schemas = m.schemas || []; m.photos = m.photos || [];
+    m.remarques = normItems(m.remarques); m.remarquesMO = normItems(m.remarquesMO);
     if(m.generalites === undefined) m.generalites = DEFAULT_GENERALITES;
     if(m.generalitesExtra === undefined) m.generalitesExtra = "";
     PROJECT.lots.forEach(l=>{
@@ -1229,7 +1244,19 @@ Dans le BTP en moyenne il y a 50 accidents de travail / jour !`;
     document.getElementById('m-nextdate').value = m.nextDate || "";
     document.getElementById('m-nextheure').value = m.nextHeure || "15:00";
     document.getElementById('m-mopresent').checked = !!m.moPresent;
-    document.getElementById('m-remarques').value = m.remarques || "";
+    m.remarques = normItems(m.remarques); m.remarquesMO = normItems(m.remarquesMO);
+    const PH_REM = "Ex. Rappel du port des EPI, soin apporté aux éléments conservés...";
+    const PH_MO = "Ex. Choix de la teinte à valider, devis complémentaire à signer...";
+    renderItemsEditor(document.getElementById('remarquesList'), m.remarques, PH_REM);
+    renderItemsEditor(document.getElementById('remarquesMOList'), m.remarquesMO, PH_MO);
+    document.getElementById('addRemarqueBtn').onclick = ()=>{
+      m.remarques.push({t:"", done:false});
+      renderItemsEditor(document.getElementById('remarquesList'), m.remarques, PH_REM, m.remarques.length-1);
+    };
+    document.getElementById('addRemarqueMOBtn').onclick = ()=>{
+      m.remarquesMO.push({t:"", done:false});
+      renderItemsEditor(document.getElementById('remarquesMOList'), m.remarquesMO, PH_MO, m.remarquesMO.length-1);
+    };
     document.getElementById('m-pieces').value = m.pieces || "";
 
     const lotWrap = document.getElementById('lotBlocks');
@@ -1410,7 +1437,6 @@ Dans le BTP en moyenne il y a 50 accidents de travail / jour !`;
     m.nextDate = document.getElementById('m-nextdate').value;
     m.nextHeure = document.getElementById('m-nextheure').value;
     m.moPresent = document.getElementById('m-mopresent').checked;
-    m.remarques = document.getElementById('m-remarques').value;
     m.pieces = document.getElementById('m-pieces').value;
     const ok = await apiSet('meeting_'+ACTIVE_ID+'_'+m.id, m);
     if(showToast) toast(ok ? "Réunion enregistrée" : "Erreur d'enregistrement", !ok);
@@ -1516,7 +1542,10 @@ Dans le BTP en moyenne il y a 50 accidents de travail / jour !`;
       ${lotCards}
 
       <h2 class="sec">Remarques générales tous corps d'état</h2>
-      <p style="white-space:pre-wrap;">${escHtml(m.remarques) || '—'}</p>
+      <div class="pv-block">${pvItemsHtml(m.remarques)}</div>
+
+      <h2 class="sec">Remarques générales Maître d'Ouvrage</h2>
+      <div class="pv-block">${pvItemsHtml(m.remarquesMO)}</div>
 
       <h2 class="sec">Pièces complémentaires</h2>
       <p style="white-space:pre-wrap;">${escHtml(m.pieces) || '—'}</p>
@@ -1533,6 +1562,11 @@ Dans le BTP en moyenne il y a 50 accidents de travail / jour !`;
   // ---------------- utils ----------------
   // Un champ de lot est une liste de lignes {t: texte, done: fait ?}.
   // Les anciens comptes rendus (simple texte) sont convertis : une ligne de texte = une ligne, "À faire".
+  function pvItemsHtml(v){
+    const items = normItems(v).filter(x=>x.t.trim());
+    if(!items.length) return '<p>—</p>';
+    return items.map(it=>'<div class="pv-item"><span class="pv-text">'+escHtml(it.t)+'</span><span class="pv-badge '+(it.done?'done':'todo')+'">'+(it.done?'Fait':'À faire')+'</span></div>').join('');
+  }
   function normItems(v){
     if(Array.isArray(v)) return v.map(x=>({t: String((x && x.t) != null ? x.t : ""), done: !!(x && x.done)}));
     if(typeof v === 'string'){
