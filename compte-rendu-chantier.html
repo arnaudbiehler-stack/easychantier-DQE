@@ -608,6 +608,7 @@ Dans le BTP en moyenne il y a 50 accidents de travail / jour !`;
       body: JSON.stringify({ key, value: val })
     });
     if(res.status === 401){ throw new Error('unauthorized'); }
+    if(res.ok && key !== 'rev') bumpRev();
     return res.ok;
   }
   async function apiDel(key){
@@ -615,7 +616,22 @@ Dans le BTP en moyenne il y a 50 accidents de travail / jour !`;
       method: 'DELETE',
       headers: { 'x-workspace-password': WORKSPACE_PASSWORD }
     });
+    if(res.ok) bumpRev();
     return res.ok;
+  }
+  // "rev" = petit marqueur partagé : il change à chaque enregistrement, ce qui permet de détecter
+  // les modifications des autres avec UNE seule lecture légère au lieu de relire toute la base.
+  let LAST_REV = null;
+  async function bumpRev(){
+    const v = Date.now() + '-' + Math.random().toString(36).slice(2,6);
+    LAST_REV = v;
+    try{
+      await fetch('/api/cr-state', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'x-workspace-password': WORKSPACE_PASSWORD },
+        body: JSON.stringify({ key: 'rev', value: v })
+      });
+    }catch(e){}
   }
 
   function toast(msg, isErr){
@@ -691,19 +707,24 @@ Dans le BTP en moyenne il y a 50 accidents de travail / jour !`;
   }
 
   function startPolling(){
+    apiGet('rev').then(v=>{ LAST_REV = v; }).catch(()=>{});
     setInterval(async ()=>{
       if(!WORKSPACE_PASSWORD) return;
+      if(document.visibilityState !== 'visible') return;
       const active = document.activeElement;
       const isTyping = active && (active.tagName==='INPUT' || active.tagName==='TEXTAREA');
       if(isTyping) return;
       try{
+        const rev = await apiGet('rev');
+        if(rev === LAST_REV){ setSyncStatus('ok'); return; }
+        LAST_REV = rev;
         setSyncStatus('syncing');
         const visible = document.querySelector('.view.active')?.id;
         if(visible === 'view-projets'){ await renderProjectsList(); }
         else if(visible === 'view-reunions'){ await loadActiveProject(); await renderMeetingsList(); }
         setSyncStatus('ok');
       }catch(e){ setSyncStatus('error'); }
-    }, 5000);
+    }, 30000);
   }
 
   async function getProjectsIndex(){ return (await apiGet('projects')) || []; }
