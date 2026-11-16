@@ -243,7 +243,14 @@
 
   /* lignes par lot : Fait / À faire */
   .items-list{display:flex;flex-direction:column;gap:6px;margin-bottom:8px;}
-  .item-row{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:start;}
+  .item-row{display:grid;grid-template-columns:auto 1fr auto auto auto;gap:8px;align-items:start;}
+  .drag-handle{cursor:grab;user-select:none;color:#9aa0b4;font-size:16px;line-height:1;padding:9px 2px;touch-action:none;}
+  .drag-handle:active{cursor:grabbing;}
+  .item-row.dragging{opacity:.35;}
+  .items-list.drop-ok{outline:2px dashed var(--green);outline-offset:3px;border-radius:8px;background:#f4fbef;}
+  .drop-line{height:3px;background:var(--green);border-radius:2px;margin:-2px 0;}
+  .move-btn{font-size:11px;font-weight:600;padding:8px 9px;border-radius:7px;border:1px solid var(--line-strong);background:#fff;color:var(--navy);cursor:pointer;white-space:nowrap;}
+  .move-btn:hover{background:#eef1fa;}
   .item-row textarea{min-height:36px;padding:7px 10px;resize:none;overflow:hidden;}
   .item-status{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:8px 10px;border-radius:7px;border:1px solid var(--line-strong);background:#fff;cursor:pointer;user-select:none;white-space:nowrap;min-width:96px;margin:0;}
   .item-status input{width:15px;height:15px;accent-color:var(--green);margin:0;}
@@ -1346,14 +1353,71 @@ Dans le BTP en moyenne il y a 50 accidents de travail / jour !`;
 
   function autoGrow(ta){ ta.style.height = 'auto'; ta.style.height = (ta.scrollHeight || 36) + 'px'; }
 
+  // ---- Glisser-déposer des lignes entre listes d'un même lot ----
+  let DRAG = null;
+  function sameZone(a, b){ return a.closest('.lot-body') === b.closest('.lot-body'); }
+  function clearDropUi(){
+    document.querySelectorAll('.items-list.drop-ok').forEach(w=>w.classList.remove('drop-ok'));
+    document.querySelectorAll('.drop-line').forEach(l=>l.remove());
+  }
+  function dropIndex(wrap, y){
+    const rows = [...wrap.querySelectorAll('.item-row:not(.dragging)')];
+    for(let k=0;k<rows.length;k++){
+      const r = rows[k].getBoundingClientRect();
+      if(y < r.top + r.height/2) return {idx:k, before:rows[k]};
+    }
+    return {idx:rows.length, before:null};
+  }
+  function setupDropZone(wrap){
+    if(wrap._dz) return; wrap._dz = true;
+    wrap.addEventListener('dragover', e=>{
+      if(!DRAG || !sameZone(DRAG.wrap, wrap)) return;
+      e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+      clearDropUi(); wrap.classList.add('drop-ok');
+      const d = dropIndex(wrap, e.clientY);
+      const line = document.createElement('div'); line.className = 'drop-line';
+      wrap.insertBefore(line, d.before);
+    });
+    wrap.addEventListener('dragleave', e=>{
+      if(!wrap.contains(e.relatedTarget)) clearDropUi();
+    });
+    wrap.addEventListener('drop', e=>{
+      if(!DRAG || !sameZone(DRAG.wrap, wrap)) return;
+      e.preventDefault();
+      const d = dropIndex(wrap, e.clientY);
+      const src = DRAG; DRAG = null; clearDropUi();
+      moveItem(src.wrap, src.index, wrap, d.idx);
+    });
+  }
+  // Déplace une ligne (texte + statut) d'une liste à une autre, ou la réordonne dans la même liste
+  function moveItem(srcWrap, srcIdx, dstWrap, pos){
+    const src = srcWrap._items, dst = dstWrap._items;
+    if(!src || !dst) return;
+    const [item] = src.splice(srcIdx, 1);
+    if(!item) return;
+    if(src === dst){
+      if(pos === null || pos > src.length) pos = src.length;
+      if(pos > srcIdx) pos = Math.min(pos, src.length);
+    } else if(dst.length === 1 && !dst[0].t.trim()){
+      dst.length = 0;                      // la ligne vide par défaut est remplacée
+    }
+    if(pos === null || pos > dst.length) pos = dst.length;
+    dst.splice(pos, 0, item);
+    renderItemsEditor(srcWrap, src, srcWrap._ph);
+    if(dstWrap !== srcWrap) renderItemsEditor(dstWrap, dst, dstWrap._ph);
+  }
+
   // Une ligne = un texte + une case à cocher "À faire" / "Fait" sur la droite.
   function renderItemsEditor(wrap, items, placeholder, focusIdx){
     wrap.innerHTML = "";
+    wrap._items = items; wrap._ph = placeholder;
+    setupDropZone(wrap);
     if(!items.length) items.push({t:"", done:false});
     items.forEach((it, i)=>{
       const row = document.createElement('div');
       row.className = 'item-row';
       row.innerHTML = `
+        <span class="drag-handle" title="Glisser pour déplacer cette ligne">⠿</span>
         <textarea rows="1" placeholder="${escAttr(placeholder)}">${escHtml(it.t)}</textarea>
         <label class="item-status ${it.done?'done':'todo'}"><input type="checkbox" ${it.done?'checked':''}><span>${it.done?'Fait':'À faire'}</span></label>
         <button type="button" class="icon-btn" title="Supprimer la ligne">✕</button>
@@ -1383,6 +1447,30 @@ Dans le BTP en moyenne il y a 50 accidents de travail / jour !`;
         items.splice(i, 1);
         renderItemsEditor(wrap, items, placeholder);
       });
+      // Glisser-déposer (souris) : la ligne ne devient déplaçable que depuis la poignée
+      const handle = row.querySelector('.drag-handle');
+      handle.addEventListener('mousedown', ()=>{ row.draggable = true; });
+      handle.addEventListener('mouseup', ()=>{ row.draggable = false; });
+      row.addEventListener('dragstart', e=>{
+        DRAG = {wrap, index:i};
+        row.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        try{ e.dataTransfer.setData('text/plain', it.t); }catch(_){}
+      });
+      row.addEventListener('dragend', ()=>{
+        row.draggable = false; row.classList.remove('dragging'); clearDropUi(); DRAG = null;
+      });
+      // Bouton de secours (tablette / téléphone) : Mentionné -> Travaux réalisés
+      if(wrap.dataset.k === 'mentionne'){
+        const mb = document.createElement('button');
+        mb.type = 'button'; mb.className = 'move-btn'; mb.textContent = '↗ Travaux';
+        mb.title = 'Déplacer vers « Travaux réalisés / planning d\'intervention »';
+        mb.addEventListener('click', ()=>{
+          const dst = wrap.closest('.lot-body').querySelector('.items-list[data-k="travaux"]');
+          moveItem(wrap, i, dst, null);
+        });
+        row.insertBefore(mb, row.querySelector('.icon-btn'));
+      }
       wrap.appendChild(row);
       autoGrow(ta);
       if(focusIdx === i){ ta.focus(); const n = ta.value.length; ta.setSelectionRange(n, n); }
